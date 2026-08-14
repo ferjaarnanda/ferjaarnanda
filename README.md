@@ -1,24 +1,27 @@
-# Ferja Arnanda — Portfolio
+# Ferja Arnanda Portfolio v5
 
-Personal portfolio website for Ferja Arnanda, Informatics student at Universitas Diponegoro.
+Static portfolio ready for GitHub + Vercel.
 
-## Focus
-- Full Stack Development
-- DevOps & Deployment
-- Programming
-- Database / SQL
-- Currently learning Artificial Intelligence
+## Upload these 6 files to the repository root
+- index.html
+- style.css
+- script.js
+- README.md
+- profile.png
+- CV_Ferja_Arnanda.pdf
 
-## Main Project
-**Sahabat Tembakau — Company Website**
+## Tools section
+Programming & Web:
+PHP, HTML5, CSS3, JavaScript, MySQL, Git, GitHub, Node.js, Python, Java, C++
 
-Built independently with native PHP, HTML, CSS, JavaScript, and MySQL. The production workflow includes Git/GitHub, cPanel hosting, domain setup, HTTPS/SSL, deployment, and Google Search Console indexing.
+DevOps & Production:
+cPanel, Hosting, Server, Domain, HTTPS/SSL, Google Search Console, SQL
 
-## Files
-- `index.html`
-- `style.css`
-- `script.js`
-- `assets/profile.png`
+Brand logos are used where an official product/technology mark is appropriate.
+Hosting, Server, Domain, HTTPS/SSL, and SQL use clean functional icons rather than pretending they are a specific brand.
 
-## Deploy
-This is a static website and can be deployed directly through Vercel, GitHub Pages, or another static hosting provider.
+Frontend, Backend, and Full Stack are not shown as tool/logo items.
+
+## Important
+No `assets/` folder is needed.
+`index.html` loads `profile.png` and `CV_Ferja_Arnanda.pdf` directly from the repository root.
