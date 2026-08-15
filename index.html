@@ -3,169 +3,236 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Ferja Arnanda — Informatics Student, Full Stack Developer, DevOps & Deployment.">
-  <title>Ferja Arnanda — Full Stack Developer · DevOps & Deployment</title>
+  <meta name="description" content="Ferja Arnanda — Full Stack Developer and DevOps & Deployment.">
+  <meta name="theme-color" content="#0a0d0f">
+  <title>Ferja Arnanda | Full Stack Developer</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="site-header">
-    <a class="brand" href="#top">FA<span>.</span></a>
-    <button class="menu-btn" aria-label="Open menu" aria-expanded="false">
-      <span></span><span></span><span></span>
-    </button>
-    <nav class="nav" aria-label="Primary navigation">
+<header class="navbar">
+  <div class="container nav-inner">
+    <a class="brand" href="#home">FA<span>.</span></a>
+    <button class="menu-toggle" aria-label="Open menu" aria-expanded="false"><span></span><span></span><span></span></button>
+    <nav class="nav-links">
       <a href="#about">About</a>
       <a href="#skills">Skills</a>
-      <a href="#education">Education</a>
+      <a href="#tools">Tools</a>
       <a href="#services">Services</a>
-      <a href="#projects">Project</a>
-      <a href="#contact">Contact</a>
+      <a href="#project">Project</a>
+      <a href="#education">Education</a>
+      <a href="CV_Ferja_Arnanda.pdf" target="_blank" rel="noopener">CV ↗</a>
     </nav>
-  </header>
+  </div>
+</header>
 
-  <main id="top">
-    <section class="hero section">
-      <div class="hero-copy">
-        <p class="eyebrow">INFORMATICS STUDENT · UNIVERSITAS DIPONEGORO</p>
-        <h1>Ferja<br>Arnanda<span>.</span></h1>
-        <p class="role">Full Stack Developer <span>·</span> DevOps & Deployment</p>
-        <p class="lead">I build web applications from frontend to backend and handle the production workflow — from database and server setup to deployment, domain, HTTPS/SSL, and search indexing.</p>
-        <div class="actions">
-          <a class="btn btn-primary" href="#projects">View My Project</a>
-          <a class="btn btn-secondary" href="CV_Ferja_Arnanda.pdf" target="_blank" rel="noopener">View CV ↗</a>
-          <a class="btn btn-secondary" href="CV_Ferja_Arnanda.pdf" download>Download CV ↓</a>
-        </div>
-        <div class="contact-line">
-          <a href="mailto:arn.techdev@gmail.com">arn.techdev@gmail.com</a>
-          <span>•</span>
-          <a href="https://www.linkedin.com/in/ferja-arnanda-35bb20406" target="_blank" rel="noopener">LinkedIn ↗</a>
-        </div>
+<main>
+<section id="home" class="hero">
+  <div class="container hero-grid">
+    <div class="hero-copy reveal">
+      <p class="eyebrow">INFORMATICS STUDENT · UNIVERSITAS DIPONEGORO</p>
+      <h1>Ferja<br><span>Arnanda.</span></h1>
+      <p class="hero-role">Full Stack Developer <b>·</b> DevOps &amp; Deployment</p>
+      <p class="hero-text">I build web applications from frontend to backend and handle the production workflow — from database and server setup to deployment, domain, HTTPS/SSL, and search indexing.</p>
+      <div class="hero-actions">
+        <a class="btn primary" href="#project">View My Project</a>
+        <a class="btn ghost" href="CV_Ferja_Arnanda.pdf" target="_blank" rel="noopener">View CV ↗</a>
+        <a class="btn ghost" href="CV_Ferja_Arnanda.pdf" download>Download CV ↓</a>
       </div>
-
-      <div class="hero-photo-wrap">
-        <div class="hero-photo">
-          <img src="profile.png" alt="Ferja Arnanda">
-          <div class="photo-caption">
-            <strong>Design → Build → Deploy</strong>
-            <span>Web · Frontend · Backend · Database · Production</span>
-          </div>
-        </div>
+      <div class="contact-line">
+        <a href="mailto:arn.techdev@gmail.com">arn.techdev@gmail.com</a>
+        <span>•</span>
+        <a href="https://www.linkedin.com/in/ferja-arnanda-35bb20406" target="_blank" rel="noopener">LinkedIn ↗</a>
       </div>
-    </section>
+    </div>
 
-    <section id="about" class="section narrow">
-      <div class="section-head"><span>01 / ABOUT ME</span><h2>Turning ideas into<br><em>working systems.</em></h2></div>
-      <p class="big-text">I am an Informatics student at Universitas Diponegoro with a strong focus on Full Stack Development and DevOps & Deployment. I enjoy building practical systems, learning technologies independently, and taking responsibility for the complete production workflow.</p>
-      <p class="body-text">My current foundation covers PHP, JavaScript, HTML, CSS, React.js, Laravel, Node.js, Java, Python, C++, MySQL, MariaDB, SQL, Git, GitHub, Figma, and production deployment workflows.</p>
-    </section>
-
-    <section id="skills" class="section">
-      <div class="section-head"><span>02 / SKILLS & TOOLS</span><h2>What I work with.</h2></div>
-
-      <div class="skill-block">
-        <div class="skill-title"><span>01</span><h3>Programming</h3></div>
-        <div class="skill-grid compact">
-          <div class="skill-card"><img src="https://cdn.simpleicons.org/python/3776AB" alt="">Python</div>
-          <div class="skill-card"><span class="text-logo">C++</span>C++</div>
+    <div class="hero-photo reveal">
+      <div class="photo-frame">
+        <img src="profile.png" alt="Ferja Arnanda">
+        <div class="photo-caption">
+          <strong>Design → Build → Deploy</strong>
+          <span>Web · Frontend · Backend · Database · Production</span>
         </div>
       </div>
+    </div>
+  </div>
+</section>
 
-      <div class="skill-block">
-        <div class="skill-title"><span>02</span><h3>Frontend</h3></div>
-        <div class="skill-grid">
-          <div class="skill-card"><img src="https://cdn.simpleicons.org/html5/E34F26" alt="">HTML5</div>
-          <div class="skill-card"><img src="https://cdn.simpleicons.org/css3/1572B6" alt="">CSS3</div>
-          <div class="skill-card"><img src="https://cdn.simpleicons.org/javascript/F7DF1E" alt="">JavaScript</div>
-          <div class="skill-card"><img src="https://cdn.simpleicons.org/react/61DAFB" alt="">React.js</div>
+<section id="about" class="section about">
+  <div class="container split">
+    <div>
+      <p class="section-label">01 / ABOUT ME</p>
+      <h2>Turning ideas into<br><span>working systems.</span></h2>
+    </div>
+    <div class="section-copy">
+      <p>I am an Informatics student at Universitas Diponegoro with a strong focus on Full Stack Development and DevOps &amp; Deployment.</p>
+      <p>I enjoy building practical systems, learning technologies independently, and taking responsibility for the complete production workflow — from development and databases to hosting, deployment, HTTPS/SSL, and search indexing.</p>
+    </div>
+  </div>
+</section>
+
+<section id="skills" class="section skills">
+  <div class="container">
+    <div class="section-head">
+      <p class="section-label">02 / SKILLS &amp; TOOLS</p>
+      <h2>What I work with.</h2>
+    </div>
+
+    <div class="skill-grid">
+      <article class="skill-card">
+        <span class="skill-number">01</span>
+        <h3>Programming</h3>
+        <div class="chips">
+          <span>Python</span><span>C++</span>
         </div>
-      </div>
-
-      <div class="skill-block">
-        <div class="skill-title"><span>03</span><h3>Backend</h3></div>
-        <div class="skill-grid">
-          <div class="skill-card"><img src="https://cdn.simpleicons.org/php/777BB4" alt="">PHP</div>
-          <div class="skill-card"><img src="https://cdn.simpleicons.org/laravel/FF2D20" alt="">Laravel</div>
-          <div class="skill-card"><img src="https://cdn.simpleicons.org/node.js/339933" alt="">Node.js</div>
-          <div class="skill-card"><img src="https://cdn.simpleicons.org/javascript/F7DF1E" alt="">JavaScript</div>
-          <div class="skill-card"><span class="java-logo">☕</span>Java</div>
-        </div>
-      </div>
-
-      <div class="tool-section">
-        <p class="tool-label">DATABASE · DESIGN · WORKFLOW</p>
-        <div class="tool-grid">
-          <div class="tool-card"><img src="https://cdn.simpleicons.org/mysql/4479A1" alt="">MySQL</div>
-          <div class="tool-card"><img src="https://cdn.simpleicons.org/mariadb/003545" alt="">MariaDB</div>
-          <div class="tool-card"><img src="https://cdn.simpleicons.org/figma/F24E1E" alt="">Figma</div>
-          <div class="tool-card"><img src="https://cdn.simpleicons.org/git/F05032" alt="">Git</div>
-          <div class="tool-card github-card"><img src="https://cdn.simpleicons.org/github/FFFFFF" alt="">GitHub</div>
-          <div class="tool-card"><img class="sql-img" src="sql-logo.png" alt="SQL">SQL</div>
-        </div>
-      </div>
-
-      <div class="tool-section">
-        <p class="tool-label">DEVOPS · PRODUCTION · SEO</p>
-        <div class="tool-grid">
-          <div class="tool-card"><img src="https://cdn.simpleicons.org/cpanel/FF6C2C" alt="">cPanel</div>
-          <div class="tool-card"><span class="line-icon">▤</span>Hosting</div>
-          <div class="tool-card"><span class="line-icon">▤</span>Server</div>
-          <div class="tool-card"><span class="line-icon">◐</span>Domain</div>
-          <div class="tool-card"><span class="line-icon lock">⌂</span>HTTPS / SSL</div>
-          <div class="tool-card"><img src="https://cdn.simpleicons.org/googlesearchconsole/458CF5" alt="">Search Console</div>
-        </div>
-      </div>
-    </section>
-
-    <section id="education" class="section narrow">
-      <div class="section-head"><span>EDUCATION</span><h2>Learning with purpose.</h2></div>
-      <div class="timeline">
-        <article><span>2025 — Present</span><h3>Universitas Diponegoro</h3><p>Informatics</p></article>
-        <article><span>2022 — 2025</span><h3>SMA Negeri 1 Tebing Tinggi</h3><p>Actively participated in school activities and served as Vice Head of the Life Skill Division of PIK-R PROSTEEN in 2024.</p></article>
-        <article><span>2019 — 2022</span><h3>MTsN 1 Tebing Tinggi</h3><p>Actively participated in academic and school activities and consistently maintained strong academic performance.</p></article>
-        <article><span>2013 — 2019</span><h3>MI Mualimin Tebing Tinggi</h3><p>Actively participated in learning and school activities with strong enthusiasm for academic development.</p></article>
-      </div>
-    </section>
-
-    <section id="services" class="section">
-      <div class="section-head"><span>03 / SERVICES</span><h2>From idea to<br><em>working website.</em></h2></div>
-      <p class="body-text intro">Website development services that can be adjusted to the project's scope, features, integrations, and delivery requirements.</p>
-      <div class="services">
-        <article class="service"><span>01</span><h3>Landing Web</h3><p>Responsive landing page from a brief or Figma design, ready to publish online.</p><b>Start from $120</b></article>
-        <article class="service"><span>02</span><h3>Portfolio Website</h3><p>Personal or professional portfolio with projects, skills, CV, contact links, and responsive layout.</p><b>Start from $150</b></article>
-        <article class="service"><span>03</span><h3>Company / Business Website</h3><p>Multi-page business website with structured content, responsive UI, and deployment support.</p><b>Start from $250</b></article>
-        <article class="service"><span>04</span><h3>Article Website</h3><p>Article or informational website with clean content structure and responsive reading experience.</p><b>Start from $180</b></article>
-        <article class="service"><span>05</span><h3>Custom Web App / Dashboard</h3><p>Backend, database, authentication, CRUD, dashboard, and tailored workflows.</p><b>Start from $350</b></article>
-        <article class="service"><span>06</span><h3>POS / Cashier & Shopping Web</h3><p>Web-based cashier, product management, transactions, and simple shopping workflows.</p><b>Start from $400</b></article>
-        <article class="service"><span>07</span><h3>Deployment & Production</h3><p>Hosting, cPanel, domain, HTTPS/SSL, deployment, Search Console, and indexing.</p><b>Start from $80</b></article>
-      </div>
-      <div class="service-note">
-        <span>HAVE A DIFFERENT REQUIREMENT?</span>
-        <h3>Discuss the project first.</h3>
-        <p>Send the brief and we can break down the scope before agreeing on the final cost.</p>
-        <a class="btn btn-primary" href="mailto:arn.techdev@gmail.com?subject=Web%20Project%20Inquiry">Discuss Project ↗</a>
-      </div>
-    </section>
-
-    <section id="projects" class="section narrow">
-      <div class="section-head"><span>04 / PROJECT</span><h2>Built and deployed.</h2></div>
-      <article class="project">
-        <div><span>01 / LIVE WEBSITE</span><h3>Sahabat Tembakau</h3><p>Company website independently developed from frontend to backend using native PHP, HTML, CSS, JavaScript, and MySQL. Managed Git/GitHub workflow, cPanel hosting, domain setup, HTTPS/SSL, deployment, and Google Search Console indexing.</p></div>
-        <a class="btn btn-secondary" href="https://sahabattembakau.com" target="_blank" rel="noopener">Visit Website ↗</a>
       </article>
-    </section>
 
-    <section id="contact" class="section contact">
-      <p class="eyebrow">LET'S BUILD SOMETHING USEFUL.</p>
-      <h2>Have a project<br><em>in mind?</em></h2>
-      <a class="btn btn-primary" href="mailto:arn.techdev@gmail.com?subject=Web%20Project%20Inquiry">arn.techdev@gmail.com ↗</a>
-      <a class="linkedin" href="https://www.linkedin.com/in/ferja-arnanda-35bb20406" target="_blank" rel="noopener">LinkedIn ↗</a>
-    </section>
-  </main>
+      <article class="skill-card">
+        <span class="skill-number">02</span>
+        <h3>Frontend</h3>
+        <div class="chips">
+          <span>HTML5</span><span>CSS3</span><span>JavaScript</span><span>React.js</span>
+        </div>
+      </article>
 
-  <footer>© 2026 Ferja Arnanda · Informatics · Universitas Diponegoro</footer>
-  <script src="script.js"></script>
+      <article class="skill-card">
+        <span class="skill-number">03</span>
+        <h3>Backend</h3>
+        <div class="chips">
+          <span>PHP</span><span>Laravel</span><span>JavaScript</span><span>Node.js</span><span>Java</span>
+        </div>
+      </article>
+
+      <article class="skill-card">
+        <span class="skill-number">04</span>
+        <h3>Database</h3>
+        <div class="chips">
+          <span>MySQL</span><span>MariaDB</span><span>SQL</span>
+        </div>
+      </article>
+
+      <article class="skill-card">
+        <span class="skill-number">05</span>
+        <h3>Design &amp; Workflow</h3>
+        <div class="chips">
+          <span>Figma</span><span>Git</span><span>GitHub</span>
+        </div>
+      </article>
+
+      <article class="skill-card">
+        <span class="skill-number">06</span>
+        <h3>DevOps &amp; Deployment</h3>
+        <div class="chips">
+          <span>cPanel</span><span>Hosting</span><span>Server</span><span>Domain</span><span>HTTPS/SSL</span><span>Deployment</span>
+        </div>
+      </article>
+
+      <article class="skill-card">
+        <span class="skill-number">07</span>
+        <h3>SEO</h3>
+        <div class="chips"><span>Google Search Console</span><span>SEO</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="tools" class="section tools">
+  <div class="container">
+    <div class="section-head centered">
+      <p class="section-label">TOOLS I USE</p>
+      <h2>Built with the right tools.</h2>
+    </div>
+
+    <div class="tool-grid">
+      <div class="tool-card"><img class="tool-icon brand-icon icon-python" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/python/python-original.svg" alt="python logo" loading="lazy"><span>Python</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-cplusplus" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/cplusplus/cplusplus-original.svg" alt="cplusplus logo" loading="lazy"><span>C++</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-html5" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/html5/html5-original.svg" alt="html5 logo" loading="lazy"><span>HTML5</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-css3" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/css3/css3-original.svg" alt="css3 logo" loading="lazy"><span>CSS3</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-javascript" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/javascript/javascript-original.svg" alt="javascript logo" loading="lazy"><span>JavaScript</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-react" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/react/react-original.svg" alt="react logo" loading="lazy"><span>React.js</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-php" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/php/php-original.svg" alt="php logo" loading="lazy"><span>PHP</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-laravel" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/laravel/laravel-original.svg" alt="laravel logo" loading="lazy"><span>Laravel</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-nodejs" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/nodejs/nodejs-original.svg" alt="nodejs logo" loading="lazy"><span>Node.js</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-java" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/java/java-original.svg" alt="java logo" loading="lazy"><span>Java</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-mysql" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/mysql/mysql-original.svg" alt="mysql logo" loading="lazy"><span>MySQL</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-mariadb" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/mariadb/mariadb-original.svg" alt="mariadb logo" loading="lazy"><span>MariaDB</span></div>
+      <div class="tool-card"><img class="tool-icon sql-logo" src="sql-logo.png" alt="SQL logo"><span>SQL</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-figma" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/figma/figma-original.svg" alt="figma logo" loading="lazy"><span>Figma</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-git" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/git/git-original.svg" alt="git logo" loading="lazy"><span>Git</span></div>
+      <div class="tool-card"><img class="tool-icon brand-icon icon-github" src="https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/github/github-original.svg" alt="github logo" loading="lazy"><span>GitHub</span></div>
+      <div class="tool-card"><span class="generic-icon">⌘</span><span>cPanel</span></div>
+      <div class="tool-card"><span class="generic-icon server-icon">▤</span><span>Hosting</span></div>
+      <div class="tool-card"><span class="generic-icon server-icon">▤</span><span>Server</span></div>
+      <div class="tool-card"><span class="generic-icon">◉</span><span>Domain</span></div>
+      <div class="tool-card"><span class="generic-icon lock-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/><path d="M12 14v3"/></svg>
+      </span><span>HTTPS / SSL</span></div>
+      <div class="tool-card"><span class="google-g">G</span><span>Search Console</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="services" class="section services">
+  <div class="container">
+    <div class="section-head">
+      <p class="section-label">03 / SERVICES</p>
+      <h2>From idea to<br><span>working website.</span></h2>
+      <p class="section-intro">Web development services can be adjusted to the project's scope, features, integrations, and delivery requirements.</p>
+    </div>
+
+    <div class="service-grid">
+      <article class="service-card"><span>01</span><h3>Landing Web</h3><p>Responsive single-page website for a product, campaign, business, or personal presentation.</p><strong>Start from $120</strong></article>
+      <article class="service-card"><span>02</span><h3>Portfolio Website</h3><p>Clean personal portfolio website with responsive layout and a professional presentation.</p><strong>Start from $70</strong></article>
+      <article class="service-card"><span>03</span><h3>Company / Business Website</h3><p>Multi-page company website with structured content, responsive UI, and deployment.</p><strong>Start from $220</strong></article>
+      <article class="service-card"><span>04</span><h3>Article Website</h3><p>Article or publication website with organized content, readable layouts, and responsive pages.</p><strong>Start from $150</strong></article>
+      <article class="service-card"><span>05</span><h3>Custom Web App / Dashboard</h3><p>Custom application with backend, database, authentication, CRUD, dashboards, and tailored workflows.</p><strong>Start from $250</strong></article>
+      <article class="service-card"><span>06</span><h3>POS / Cashier &amp; Shopping Web</h3><p>Point-of-sale, cashier, inventory, ordering, or shopping web systems tailored to the workflow.</p><strong>Start from $280</strong></article>
+      <article class="service-card"><span>07</span><h3>Deployment &amp; Production</h3><p>Hosting, cPanel, domain, HTTPS/SSL, deployment, Search Console, and indexing.</p><strong>Based on scope</strong></article>
+    </div>
+  </div>
+</section>
+
+<section id="project" class="section project">
+  <div class="container project-box">
+    <div>
+      <p class="section-label">04 / PROJECT</p>
+      <h2>Sahabat Tembakau</h2>
+      <p>Company website independently developed from frontend to backend using native PHP, HTML, CSS, JavaScript, and MySQL. The production workflow covered Git/GitHub, cPanel hosting, domain setup, HTTPS/SSL, deployment, Google Search Console, and indexing.</p>
+    </div>
+    <a class="btn primary" href="https://sahabattembakau.com" target="_blank" rel="noopener">View Project ↗</a>
+  </div>
+</section>
+
+<section id="education" class="section education">
+  <div class="container">
+    <div class="section-head"><p class="section-label">05 / EDUCATION</p><h2>Learning &amp; growing.</h2></div>
+    <div class="timeline">
+      <article><span>2025 — Present</span><h3>Universitas Diponegoro</h3><p>Informatics. Focused on building programming foundations and continuously developing technical skills.</p></article>
+      <article><span>2022 — 2025</span><h3>SMA Negeri 1 Tebing Tinggi</h3><p>Actively participated in school activities and served as Vice Head of the Life Skill Division of PIK-R PROSTEEN in 2024.</p></article>
+      <article><span>2019 — 2022</span><h3>MTsN 1 Tebing Tinggi</h3><p>Highly enthusiastic about learning programming and consistently worked toward strong academic results while participating in academic and school activities.</p></article>
+      <article><span>2013 — 2019</span><h3>MI Mualimin Tebing Tinggi</h3><p>Highly enthusiastic about learning and school activities, with strong effort toward achieving the best results during the learning process.</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="section cta">
+  <div class="container cta-box">
+    <p class="section-label">HAVE A DIFFERENT REQUIREMENT?</p>
+    <h2>Discuss the project<br>first.</h2>
+    <p>Send the brief and we can break down the scope before agreeing on the final cost.</p>
+    <a class="btn primary" href="mailto:arn.techdev@gmail.com">Discuss Project ↗</a>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="container footer-inner">
+    <span>Ferja Arnanda</span>
+    <span>© 2026 All rights reserved.</span>
+  </div>
+</footer>
+<script src="script.js"></script>
 </body>
 </html>
