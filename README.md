@@ -1,27 +1,22 @@
-# Ferja Arnanda Portfolio v5
+# Ferja Arnanda Portfolio v7
 
-Static portfolio ready for GitHub + Vercel.
+Static portfolio for GitHub + Vercel.
 
-## Upload these 6 files to the repository root
-- index.html
-- style.css
-- script.js
-- README.md
-- profile.png
-- CV_Ferja_Arnanda.pdf
+## Root files
+- `index.html`
+- `style.css`
+- `script.js`
+- `profile.png`
+- `CV_Ferja_Arnanda.pdf`
 
-## Tools section
-Programming & Web:
-PHP, HTML5, CSS3, JavaScript, MySQL, Git, GitHub, Node.js, Python, Java, C++
+No `assets/` folder is required.
 
-DevOps & Production:
-cPanel, Hosting, Server, Domain, HTTPS/SSL, Google Search Console, SQL
-
-Brand logos are used where an official product/technology mark is appropriate.
-Hosting, Server, Domain, HTTPS/SSL, and SQL use clean functional icons rather than pretending they are a specific brand.
-
-Frontend, Backend, and Full Stack are not shown as tool/logo items.
-
-## Important
-No `assets/` folder is needed.
-`index.html` loads `profile.png` and `CV_Ferja_Arnanda.pdf` directly from the repository root.
+## Updated in v7
+- Updated the website to match the latest CV stack.
+- Added React.js, Laravel, MariaDB, Node.js, Python, Java, C++, Figma, Git and GitHub.
+- Kept Full Stack Developer + DevOps & Deployment as the main identity.
+- Removed AI references from the website.
+- Added MariaDB to the Tools section with its logo.
+- Added Top 3 descriptions for MTsN 1 Tebing Tinggi and MI Mualimin.
+- Kept the profile photo and CV as root-level files for easy GitHub upload.
+- LinkedIn buttons use the actual profile URL while displaying a short `LinkedIn ↗` label.
