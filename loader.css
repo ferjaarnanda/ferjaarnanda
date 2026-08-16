@@ -1,89 +1,154 @@
-/* Ferja Portfolio Loader — v2 */
+
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
+
 #ferja-loader {
-  position: fixed;
-  inset: 0;
-  z-index: 99999;
-  overflow: hidden;
-  background: #1b1b1b;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 1;
-  visibility: visible;
-  transition: opacity .75s ease, visibility .75s ease;
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    overflow: hidden;
+    background: #191919;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity .8s ease, visibility .8s ease;
+    font-family: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 #ferja-loader.is-hidden {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
 }
 
-#ferja-loader-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+#ferja-loader .loader-stars {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
 }
 
-.ferja-loader-content {
-  position: relative;
-  z-index: 2;
-  width: min(86vw, 520px);
-  text-align: center;
+#ferja-loader .star {
+    position: absolute;
+    bottom: -10px;
+    width: var(--size);
+    height: var(--size);
+    border-radius: 50%;
+    background: rgba(255,255,255,var(--opacity));
+    animation: ferja-star-rise var(--duration) linear infinite;
+    animation-delay: var(--delay);
+    will-change: transform;
 }
 
-.ferja-loader-percent {
-  margin: 0 0 44px;
-  font: 800 clamp(48px, 12vw, 76px)/1 "Arial", sans-serif;
-  letter-spacing: -0.045em;
+@keyframes ferja-star-rise {
+    from { transform: translate3d(0, 0, 0); }
+    to { transform: translate3d(var(--drift), -115vh, 0); }
 }
 
-.ferja-loader-progress {
-  width: 100%;
-  height: 14px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: rgba(255,255,255,.18);
+#ferja-loader .loader-content {
+    position: relative;
+    z-index: 2;
+    width: min(88vw, 760px);
+    text-align: center;
 }
 
-.ferja-loader-progress-bar {
-  width: 0%;
-  height: 100%;
-  border-radius: inherit;
-  background: #fff;
-  transform-origin: left center;
+#ferja-loader .loader-percent {
+    margin: 0 0 24px;
+    color: #f5f5f5;
+    font-size: clamp(50px, 9vw, 82px);
+    line-height: 1;
+    font-weight: 600;
+    letter-spacing: -0.055em;
 }
 
-.ferja-loader-message {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: min(90vw, 700px);
-  transform: translate(-50%, -50%);
-  margin: 0;
-  opacity: 0;
-  text-align: center;
-  font: 700 clamp(20px, 5vw, 38px)/1.35 "Arial", sans-serif;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-  transition: opacity .65s ease;
+#ferja-loader .loader-bar {
+    width: min(76vw, 500px);
+    height: 4px;
+    margin: 0 auto;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255,255,255,.15);
 }
 
-#ferja-loader.message-state .ferja-loader-content {
-  opacity: 0;
-  transition: opacity .35s ease;
+#ferja-loader .loader-progress {
+    width: 0%;
+    height: 100%;
+    border-radius: inherit;
+    background: #f5f5f5;
+    transition: width .08s linear;
 }
 
-#ferja-loader.message-state .ferja-loader-message {
-  opacity: 1;
+#ferja-loader .loader-message-wrap {
+    display: none;
+}
+
+#ferja-loader.show-message .loader-percent,
+#ferja-loader.show-message .loader-bar {
+    display: none;
+}
+
+#ferja-loader.show-message .loader-message-wrap {
+    display: block;
+    animation: ferja-message-in .8s cubic-bezier(.22,1,.36,1) both;
+}
+
+#ferja-loader .loader-message {
+    margin: 0 auto;
+    color: #f4f4f4;
+    font-size: clamp(25px, 5.2vw, 46px);
+    line-height: 1.22;
+    font-weight: 500;
+    letter-spacing: -0.045em;
+    max-width: 720px;
+}
+
+#ferja-loader .loader-message strong {
+    font-weight: 700;
+}
+
+#ferja-loader .loader-action {
+    margin-top: 30px;
+    padding: 12px 21px;
+    border: 1px solid rgba(255,255,255,.42);
+    border-radius: 999px;
+    background: transparent;
+    color: #f4f4f4;
+    font: 500 14px/1 'Manrope', sans-serif;
+    letter-spacing: .01em;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateY(8px);
+    animation: ferja-button-in .7s .25s ease forwards;
+    transition: background .25s ease, color .25s ease, border-color .25s ease;
+}
+
+#ferja-loader .loader-action:hover {
+    background: #f4f4f4;
+    color: #191919;
+    border-color: #f4f4f4;
+}
+
+@keyframes ferja-message-in {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ferja-button-in {
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 520px) {
+    #ferja-loader .loader-message {
+        max-width: 340px;
+    }
+
+    #ferja-loader .loader-action {
+        margin-top: 25px;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #ferja-loader,
-  .ferja-loader-content,
-  .ferja-loader-message {
-    transition-duration: .2s;
-  }
+    #ferja-loader .star {
+        animation-duration: 20s !important;
+    }
 }
