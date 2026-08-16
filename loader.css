@@ -1,78 +1,89 @@
-/* Ferja Arnanda — Standalone Loading Screen */
-
-html.fa-loading,
-html.fa-loading body {
-  overflow: hidden !important;
-}
-
-#fa-loader {
+/* Ferja Portfolio Loader — v2 */
+#ferja-loader {
   position: fixed;
   inset: 0;
-  z-index: 2147483647;
-  background: #090b0d;
+  z-index: 99999;
+  overflow: hidden;
+  background: #1b1b1b;
+  color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
   opacity: 1;
   visibility: visible;
-  transition: opacity .65s ease, visibility .65s ease;
+  transition: opacity .75s ease, visibility .75s ease;
 }
 
-#fa-loader.fa-loader-hide {
+#ferja-loader.is-hidden {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
 }
 
-.fa-stars {
+#ferja-loader-canvas {
   position: absolute;
   inset: 0;
-  pointer-events: none;
+  width: 100%;
+  height: 100%;
 }
 
-.fa-star {
-  position: absolute;
-  display: block;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 5px rgba(255,255,255,.55);
-  animation: fa-star-twinkle ease-in-out infinite alternate;
-}
-
-@keyframes fa-star-twinkle {
-  from { transform: scale(.55); opacity: .18; }
-  to   { transform: scale(1.25); opacity: 1; }
-}
-
-.fa-loader-content {
+.ferja-loader-content {
   position: relative;
   z-index: 2;
-  width: min(500px, 72vw);
+  width: min(86vw, 520px);
   text-align: center;
 }
 
-.fa-loader-percent {
-  margin-bottom: 28px;
-  color: #f5f5f5;
-  font-family: Arial, Helvetica, sans-serif;
-  font-size: clamp(42px, 8vw, 72px);
-  font-weight: 700;
-  letter-spacing: -2px;
+.ferja-loader-percent {
+  margin: 0 0 44px;
+  font: 800 clamp(48px, 12vw, 76px)/1 "Arial", sans-serif;
+  letter-spacing: -0.045em;
 }
 
-.fa-loader-bar {
+.ferja-loader-progress {
   width: 100%;
   height: 14px;
-  overflow: hidden;
   border-radius: 999px;
+  overflow: hidden;
   background: rgba(255,255,255,.18);
 }
 
-.fa-loader-progress {
-  width: 0;
+.ferja-loader-progress-bar {
+  width: 0%;
   height: 100%;
   border-radius: inherit;
   background: #fff;
-  transition: width .04s linear;
+  transform-origin: left center;
+}
+
+.ferja-loader-message {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(90vw, 700px);
+  transform: translate(-50%, -50%);
+  margin: 0;
+  opacity: 0;
+  text-align: center;
+  font: 700 clamp(20px, 5vw, 38px)/1.35 "Arial", sans-serif;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  transition: opacity .65s ease;
+}
+
+#ferja-loader.message-state .ferja-loader-content {
+  opacity: 0;
+  transition: opacity .35s ease;
+}
+
+#ferja-loader.message-state .ferja-loader-message {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #ferja-loader,
+  .ferja-loader-content,
+  .ferja-loader-message {
+    transition-duration: .2s;
+  }
 }

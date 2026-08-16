@@ -1,65 +1,130 @@
-/* Ferja Arnanda — Standalone Loading Screen
-   Add only this line to your existing index.html:
-   <script src="loader.js"></script>
-*/
-
 (() => {
-  const loader = document.createElement("div");
-  loader.id = "fa-loader";
-  loader.innerHTML = `
-    <div class="fa-stars"></div>
-    <div class="fa-loader-content">
-      <div class="fa-loader-percent">0%</div>
-      <div class="fa-loader-bar">
-        <div class="fa-loader-progress"></div>
+  "use strict";
+
+  const DURATION = 2600;
+  const MESSAGE_DURATION = 1250;
+  const STAR_COUNT = 105;
+
+  function initLoader() {
+    if (document.getElementById("ferja-loader")) return;
+
+    const loader = document.createElement("div");
+    loader.id = "ferja-loader";
+    loader.setAttribute("aria-label", "Loading portfolio");
+
+    loader.innerHTML = `
+      <canvas id="ferja-loader-canvas"></canvas>
+      <div class="ferja-loader-content">
+        <p class="ferja-loader-percent">0%</p>
+        <div class="ferja-loader-progress">
+          <div class="ferja-loader-progress-bar"></div>
+        </div>
       </div>
-    </div>
-  `;
+      <p class="ferja-loader-message">From Idea to Production.</p>
+    `;
 
-  document.documentElement.classList.add("fa-loading");
-  document.body.prepend(loader);
+    document.body.prepend(loader);
 
-  const stars = loader.querySelector(".fa-stars");
+    const canvas = loader.querySelector("#ferja-loader-canvas");
+    const ctx = canvas.getContext("2d");
+    const percent = loader.querySelector(".ferja-loader-percent");
+    const bar = loader.querySelector(".ferja-loader-progress-bar");
 
-  // Small random stars
-  for (let i = 0; i < 90; i++) {
-    const star = document.createElement("span");
-    star.className = "fa-star";
-    star.style.left = Math.random() * 100 + "%";
-    star.style.top = Math.random() * 100 + "%";
-    star.style.animationDelay = Math.random() * 2.5 + "s";
-    star.style.animationDuration = (1.5 + Math.random() * 2.5) + "s";
-    star.style.opacity = (0.25 + Math.random() * 0.75).toFixed(2);
-    const size = (1 + Math.random() * 2.2).toFixed(1);
-    star.style.width = size + "px";
-    star.style.height = size + "px";
-    stars.appendChild(star);
-  }
+    let width = 0;
+    let height = 0;
+    let stars = [];
+    let startTime = performance.now();
+    let messageShown = false;
 
-  const percent = loader.querySelector(".fa-loader-percent");
-  const progress = loader.querySelector(".fa-loader-progress");
+    const resize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      createStars();
+    };
 
-  const duration = 2600;
-  const start = performance.now();
+    const createStars = () => {
+      stars = Array.from({ length: STAR_COUNT }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        r: Math.random() < .72
+          ? Math.random() * .75 + .35
+          : Math.random() * 1.05 + .7,
+        speed: Math.random() * .32 + .08,
+        alpha: Math.random() * .42 + .25,
+        twinkle: Math.random() * Math.PI * 2,
+        twinkleSpeed: Math.random() * .018 + .004
+      }));
+    };
 
-  function animate(now) {
-    const value = Math.min((now - start) / duration, 1);
-    const number = Math.floor(value * 100);
+    const drawStars = () => {
+      ctx.clearRect(0, 0, width, height);
 
-    percent.textContent = number + "%";
-    progress.style.width = number + "%";
+      for (const s of stars) {
+        s.y -= s.speed;
 
-    if (value < 1) {
-      requestAnimationFrame(animate);
-    } else {
+        if (s.y < -3) {
+          s.y = height + Math.random() * 8;
+          s.x = Math.random() * width;
+        }
+
+        s.twinkle += s.twinkleSpeed;
+        const pulse = .84 + Math.sin(s.twinkle) * .16;
+        const a = Math.max(.12, s.alpha * pulse);
+
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        ctx.fill();
+      }
+
+      requestAnimationFrame(drawStars);
+    };
+
+    const finish = () => {
+      if (messageShown) return;
+      messageShown = true;
+
+      percent.textContent = "100%";
+      bar.style.width = "100%";
+      loader.classList.add("message-state");
+
       setTimeout(() => {
-        loader.classList.add("fa-loader-hide");
-        document.documentElement.classList.remove("fa-loading");
+        loader.classList.add("is-hidden");
+        setTimeout(() => loader.remove(), 800);
+      }, MESSAGE_DURATION);
+    };
 
-        setTimeout(() => loader.remove(), 700);
-      }, 180);
-    }
+    const animateLoading = (now) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / DURATION, 1);
+      const eased = 1 - Math.pow(1 - progress, 2);
+
+      const value = Math.round(eased * 100);
+      percent.textContent = `${value}%`;
+      bar.style.width = `${value}%`;
+
+      if (progress < 1) {
+        requestAnimationFrame(animateLoading);
+      } else {
+        finish();
+      }
+    };
+
+    resize();
+    window.addEventListener("resize", resize, { passive: true });
+    drawStars();
+    requestAnimationFrame(animateLoading);
   }
 
-  requestAnimationFrame(animate);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initLoader, { once: true });
+  } else {
+    initLoader();
+  }
 })();
