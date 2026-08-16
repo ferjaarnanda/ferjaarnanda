@@ -6,18 +6,15 @@
     const stars = document.createElement("div");
     stars.className = "loader-stars";
 
-    const starCount = Math.min(
-        78,
-        Math.max(44, Math.floor(window.innerWidth / 6))
-    );
+    const starCount = Math.min(82, Math.max(52, Math.floor(window.innerWidth / 5.5)));
 
     for (let i = 0; i < starCount; i++) {
         const star = document.createElement("span");
         star.className = "star";
 
-        const size = (Math.random() * 1.9 + 0.45).toFixed(2);
-        const opacity = (Math.random() * 0.42 + 0.14).toFixed(2);
-        const duration = (Math.random() * 17 + 12).toFixed(2);
+        const size = (Math.random() * 1.55 + 0.35).toFixed(2);
+        const opacity = (Math.random() * 0.34 + 0.12).toFixed(2);
+        const duration = (Math.random() * 22 + 10).toFixed(2);
         const delay = (-Math.random() * duration).toFixed(2);
         const drift = ((Math.random() - 0.5) * 80).toFixed(0) + "px";
 
@@ -51,12 +48,12 @@
     const message = document.createElement("div");
     message.className = "loader-message";
     message.innerHTML =
-        "TURNING YOUR IDEAS INTO<br><strong>WORKING WEBSITES, FROM CODE TO PRODUCTION.</strong>";
+        "WANT TO BUILD A WEBSITE OR<br><strong>BRING AN IDEA FROM CODE TO PRODUCTION?</strong>";
 
     const action = document.createElement("button");
     action.className = "loader-action";
     action.type = "button";
-    action.textContent = "Explore My Portfolio →";
+    action.textContent = "View My Portfolio ↗";
 
     messageWrap.append(message, action);
     content.append(percent, bar, messageWrap);
