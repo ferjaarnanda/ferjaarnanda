@@ -5,7 +5,7 @@
 Saya mahasiswa Informatika, Universitas Diponegoro
 Ingin lebih banyak belajar dan berkompetisi nyata
 
-[LinkedIn](https://linkedin.com/in/ferjaarnanda) · [Portofolio](https://ferjaarnada.vercel.app)
+[LinkedIn](https://linkedin.com/in/ferjaarnanda) · [Portofolio](https://ferjaarnanda.vercel.app)
 
 <hr>
 
