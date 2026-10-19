@@ -2923,7 +2923,7 @@ export default function MarioConsoleSection() {
           </div>
 
           <p className="text-[12px] text-muted mt-3 select-none">
-            Coba seret Mario ke blok tanda tanya.
+            Coba seret marionya ke blok ? atau deketin ke bunga
           </p>
         </div>
 
