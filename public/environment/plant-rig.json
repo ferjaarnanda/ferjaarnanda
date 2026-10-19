@@ -1,0 +1,19 @@
+{
+ "head": {
+  "file": "plant-head-sheet.png",
+  "cell": 88,
+  "pivot": [
+   44,
+   44
+  ],
+  "columns": "mouth frames: 0 closed, 1 half, 2 wide open, 3 snap",
+  "rows": "angles (deg, positive = tilt right/clockwise, 0 = straight up): [-135, -120, -105, -90, -75, -60, -45, -30, -15, 0, 15, 30, 45, 60, 75, 90, 105, 120, 135]"
+ },
+ "stemBead": "stem-bead.png (10x10), place beads every 4px along a curve from the pipe mouth to the head pivot",
+ "leaves": "plant-leaves.png (32x18), draw behind the pipe at x=407, y=mouthY-14",
+ "fx": {
+  "star": "fx-star.png 11x11",
+  "bump": "fx-bump.png 14x11",
+  "smoke": "fx-smoke-sheet.png 4 frames of 22x22"
+ }
+}

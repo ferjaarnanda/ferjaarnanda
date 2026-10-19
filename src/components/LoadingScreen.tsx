@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import gsap from "gsap";
 import levelData from "../../public/environment/level-data.json";
+import { playCoinKling, playBoomSfx } from "@/lib/sfx";
 
 const SESSION_KEY = "ferja_intro_seen_v1";
 
@@ -14,6 +15,8 @@ const CRITICAL_ASSETS = [
   "/environment/level-loading-decor.png",
   "/environment/bg-hills-far.png",
   "/environment/bg-hills-mid.png",
+  "/environment/tile-grass.png",
+  "/environment/tile-brick.png",
   "/environment/minicoin-sheet.png",
   "/coins/spin24-rainbow.png",
   "/environment/cloud-xs.png",
@@ -43,7 +46,7 @@ const CRITICAL_ASSETS = [
 interface CloudInstance {
   sprite: string;
   x: number;
-  yFrac: number; // fraction of total native height or sky area
+  yFrac: number;
   inStrip: boolean;
   stripY: number;
   speed: number;
@@ -51,11 +54,21 @@ interface CloudInstance {
   h: number;
 }
 
+interface DynamicMiniCoin {
+  id: number;
+  x: number;
+  y: number;
+  collected: boolean;
+  collectedAt: number; // elapsedSec when touched
+}
+
 const INITIAL_CLOUDS: CloudInstance[] = [
-  { sprite: "/environment/cloud-xl.png", x: 60, yFrac: 0.18, inStrip: false, stripY: 18, speed: 12, w: 112, h: 56 },
-  { sprite: "/environment/cloud-m.png", x: 240, yFrac: 0.45, inStrip: false, stripY: 36, speed: 18, w: 62, h: 38 },
-  { sprite: "/environment/cloud-l.png", x: 420, yFrac: 0.25, inStrip: false, stripY: 22, speed: 14, w: 86, h: 48 },
-  { sprite: "/environment/cloud-s.png", x: 610, yFrac: 0.62, inStrip: false, stripY: 48, speed: 22, w: 44, h: 30 },
+  { sprite: "/environment/cloud-xl.png", x: 60, yFrac: 0.16, inStrip: false, stripY: 18, speed: 12, w: 112, h: 56 },
+  { sprite: "/environment/cloud-m.png", x: 220, yFrac: 0.38, inStrip: false, stripY: 36, speed: 18, w: 62, h: 38 },
+  { sprite: "/environment/cloud-l.png", x: 390, yFrac: 0.22, inStrip: false, stripY: 22, speed: 14, w: 86, h: 48 },
+  { sprite: "/environment/cloud-s.png", x: 560, yFrac: 0.58, inStrip: false, stripY: 48, speed: 22, w: 44, h: 30 },
+  { sprite: "/environment/cloud-xs.png", x: 710, yFrac: 0.76, inStrip: false, stripY: 16, speed: 25, w: 34, h: 26 },
+  { sprite: "/environment/cloud-m.png", x: 880, yFrac: 0.48, inStrip: false, stripY: 28, speed: 17, w: 62, h: 38 },
   { sprite: "/environment/cloud-xs.png", x: 140, yFrac: 0.75, inStrip: true, stripY: 16, speed: 26, w: 34, h: 26 },
   { sprite: "/environment/cloud-m.png", x: 350, yFrac: 0.5, inStrip: true, stripY: 28, speed: 16, w: 62, h: 38 },
   { sprite: "/environment/cloud-s.png", x: 530, yFrac: 0.3, inStrip: true, stripY: 14, speed: 21, w: 44, h: 30 },
@@ -167,11 +180,17 @@ export default function LoadingScreen() {
       "/environment/level-loading-decor.png",
       "/environment/bg-hills-far.png",
       "/environment/bg-hills-mid.png",
+      "/environment/tile-grass.png",
+      "/environment/tile-brick.png",
       "/environment/minicoin-sheet.png",
       "/coins/spin24-rainbow.png",
+      "/environment/sparkle-1.png",
+      "/environment/sparkle-2.png",
+      "/environment/sparkle-3.png",
+      "/environment/sparkle-4.png",
     ];
 
-    const allPromises = CRITICAL_ASSETS.map((src) => loadSingleImage(src));
+    CRITICAL_ASSETS.forEach((src) => loadSingleImage(src));
     const criticalPromise = Promise.all(
       firstCritical.map((src) => loadSingleImage(src))
     );
@@ -188,8 +207,8 @@ export default function LoadingScreen() {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Prepare offscreen decor canvas with static pit minicoins cleared out
-      // so animated 4-frame minicoins replace them without static bleed-through
+      // Prepare offscreen decor canvas (level-loading-decor.png now contains NO coins;
+      // only clear the static flag at x=1660 so waving flag-1..4 replaces it cleanly)
       const decorImg = imageMap.get("/environment/level-loading-decor.png");
       const decorCanvas = document.createElement("canvas");
       decorCanvas.width = 1920;
@@ -197,48 +216,88 @@ export default function LoadingScreen() {
       const decorCtx = decorCanvas.getContext("2d");
       if (decorCtx && decorImg) {
         decorCtx.drawImage(decorImg, 0, 0);
-        const pits = levelData.loading.pits || [
-          { startX: 256, width: 64 },
-          { startX: 544, width: 64 },
-          { startX: 832, width: 64 },
-        ];
-        for (const pit of pits) {
-          // Clear the entire static coin arc box above each pit so animated 4-frame minicoins have zero static artifacts
-          decorCtx.clearRect(pit.startX - 12, 86, pit.width + 24, 64);
-        }
-        // Also clear static flag region so waving flag-1..4 replaces it cleanly
         decorCtx.clearRect(1660, 68, 42, 100);
       }
 
-      // Compute integer scale S (min 2, max 6) so 216*S is ~75-85% of viewport height
+      // Compute integer scale S:
+      // S = clamp(floor(0.8 * viewportHeight / 216), 1, 6)
+      // and then LOWER S until visible native width floor(viewportWidth / S) is at least 300.
       const computeMetrics = () => {
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        let S = Math.round((vh * 0.8) / 216);
-        S = Math.max(2, Math.min(6, S));
+        let S = Math.max(1, Math.min(6, Math.floor((0.8 * vh) / 216)));
+        while (S > 1 && Math.floor(vw / S) < 300) {
+          S--;
+        }
         const Wn = Math.ceil(vw / S);
         const Hn = Math.ceil(vh / S);
         if (canvas.width !== Wn || canvas.height !== Hn) {
           canvas.width = Wn;
           canvas.height = Hn;
         }
-        return { vw, vh, S, Wn, Hn };
+        // When screen is much taller than the 216px strip (portrait letterbox, e.g. 390x844 where Hn=844),
+        // position strip in the vertical middle so sky fills above and ground tiles continue below.
+        // On desktop/landscape (e.g. 1440x900 where S=3, Hn=300), align strip to the bottom of the viewport.
+        const isTallLetterbox = Hn > 340;
+        const baseStripTop = isTallLetterbox
+          ? Math.floor((Hn - 216) * 0.52)
+          : Hn - 216;
+        return { vw, vh, S, Wn, Hn, baseStripTop, isTallLetterbox };
+      };
+
+      const pits = levelData.loading.pits || [
+        { startX: 256, width: 64 },
+        { startX: 544, width: 64 },
+        { startX: 832, width: 64 },
+      ];
+
+      const isInsidePit = (worldX: number) => {
+        for (const pit of pits) {
+          if (worldX >= pit.startX && worldX < pit.startX + pit.width) {
+            return true;
+          }
+        }
+        return false;
+      };
+
+      // Helper to draw extra ground rows below stripTop + 216 when screen is taller than the strip
+      const drawGroundExtensionBelow = (camX: number, stripTop: number, Wn: number, Hn: number) => {
+        const bottomStart = stripTop + 216;
+        if (bottomStart >= Hn) return 0;
+        const brickImg = imageMap.get("/environment/tile-brick.png");
+        const grassImg = imageMap.get("/environment/tile-grass.png");
+        if (!brickImg) return 0;
+
+        let rowsDrawn = 0;
+        const firstTileWorldX = Math.floor(camX / 16) * 16;
+        for (let y = bottomStart; y < Hn; y += 16) {
+          const tileSprite = rowsDrawn === 0 && grassImg ? brickImg : brickImg;
+          for (let wx = firstTileWorldX; wx < camX + Wn + 16; wx += 16) {
+            if (isInsidePit(wx)) continue;
+            const screenX = Math.round(wx - camX);
+            ctx.drawImage(tileSprite, screenX, y, 16, 16);
+          }
+          rowsDrawn++;
+        }
+        return rowsDrawn;
       };
 
       // REDUCED MOTION: static frame (sky, hills, rainbow, coin) for 1.5s then fade out
       if (prefersReduced) {
-        const { Wn, Hn } = computeMetrics();
+        const { Wn, Hn, baseStripTop } = computeMetrics();
         ctx.imageSmoothingEnabled = false;
-        const stripTop = Hn - 216;
+        const stripTop = baseStripTop;
 
-        // Stepped sky bands
         const bands = ["#5C94FC", "#6EA2FD", "#82B1FE", "#A6C8FF"];
+        const skyBottom = stripTop + 168;
         for (let i = 0; i < 4; i++) {
           ctx.fillStyle = bands[i];
-          const y0 = Math.floor((Hn * i) / 4);
-          const y1 = Math.floor((Hn * (i + 1)) / 4);
+          const y0 = Math.floor((skyBottom * i) / 4);
+          const y1 = Math.floor((skyBottom * (i + 1)) / 4);
           ctx.fillRect(0, y0, Wn, y1 - y0);
         }
+        ctx.fillStyle = "#5C94FC";
+        ctx.fillRect(0, skyBottom, Wn, Hn - skyBottom);
 
         const hillsFar = imageMap.get("/environment/bg-hills-far.png");
         const hillsMid = imageMap.get("/environment/bg-hills-mid.png");
@@ -250,11 +309,12 @@ export default function LoadingScreen() {
         if (hillsMid) ctx.drawImage(hillsMid, 0, stripTop);
         ctx.drawImage(decorCanvas, 0, stripTop);
         if (groundImg) ctx.drawImage(groundImg, 0, stripTop);
+        drawGroundExtensionBelow(0, stripTop, Wn, Hn);
         if (heroSheet) {
           ctx.drawImage(heroSheet, 0, 0, 36, 50, 60 - 18, stripTop + 168 - 48, 36, 50);
         }
         if (spinRainbow) {
-          ctx.drawImage(spinRainbow, 0, 0, 27, 35, 140, stripTop + 58, 54, 70);
+          ctx.drawImage(spinRainbow, 0, 0, 35, 35, 140, stripTop + 58, 70, 70);
         }
         setProgressPct(100);
 
@@ -270,6 +330,16 @@ export default function LoadingScreen() {
           clearTimeout(t2);
         };
       }
+
+      // Initialize the 12 dynamic gold mini coins from level-data.json -> loading.coins.items
+      const rawCoinItems = levelData.loading.coins?.items || [];
+      const miniCoins: DynamicMiniCoin[] = rawCoinItems.map((item, idx) => ({
+        id: idx,
+        x: item.x,
+        y: item.y,
+        collected: false,
+        collectedAt: -1,
+      }));
 
       // Scene state animated by GSAP master timeline
       const state = {
@@ -313,7 +383,6 @@ export default function LoadingScreen() {
       const tl = gsap.timeline({
         onUpdate: () => {
           const t = tl.time();
-          // Progress bar reaches 100% at the wipe (11.8s)
           const pct = Math.min(100, Math.max(0, (t / 11.8) * 100));
           setProgressPct(pct);
           if (t >= 11.8) {
@@ -422,8 +491,18 @@ export default function LoadingScreen() {
         7.1
       );
 
-      // At 7.35s (apex of leap): coin pops, sparkle-1..4 burst, text-plus1 rises & fades, small camera bounce
-      tl.set(state, { coinCollected: true, plus1Alpha: 1, plus1Y: 0, sparkleProgress: 0 }, 7.35);
+      // At 7.35s (apex of leap): coin pops, sparkle-1..4 burst, text-plus1 rises & fades, small camera bounce, kling sfx
+      tl.call(
+        () => {
+          state.coinCollected = true;
+          state.plus1Alpha = 1;
+          state.plus1Y = 0;
+          state.sparkleProgress = 0;
+          playCoinKling();
+        },
+        [],
+        7.35
+      );
       tl.to(state, { sparkleProgress: 1, duration: 0.4, ease: "none" }, 7.35);
       tl.to(state, { plus1Y: -28, plus1Alpha: 0, duration: 0.45, ease: "power1.out" }, 7.35);
       tl.to(state, { camBounceY: -5, duration: 0.12, yoyo: true, repeat: 1, ease: "power1.out" }, 7.35);
@@ -438,15 +517,16 @@ export default function LoadingScreen() {
 
       // 10.4 - 10.5s: IMPACT: white-orange flash (1 to 0 over 400ms), 500ms screen shake (+-8px),
       // explosion-1..5 at scale 2*S centered on hero, hero switches to frame 13 (squash)
-      tl.set(
-        state,
-        {
-          phase: "impact",
-          meteorProgress: -1,
-          flashAlpha: 1,
-          shakeActive: 1,
-          explosionProgress: 0,
+      tl.call(
+        () => {
+          state.phase = "impact";
+          state.meteorProgress = -1;
+          state.flashAlpha = 1;
+          state.shakeActive = 1;
+          state.explosionProgress = 0;
+          playBoomSfx();
         },
+        [],
         10.4
       );
       tl.to(state, { flashAlpha: 0, duration: 0.4, ease: "power2.out" }, 10.4);
@@ -478,14 +558,13 @@ export default function LoadingScreen() {
           tl.play();
         }
 
-        const { S, Wn, Hn } = computeMetrics();
+        const { S, Wn, Hn, baseStripTop, isTallLetterbox } = computeMetrics();
         ctx.imageSmoothingEnabled = false;
         ctx.clearRect(0, 0, Wn, Hn);
 
         // During pixel-block wipe (11.8-13.0s), a grid of square blocks (size = 8*S px)
         // covers the screen in sky blue then dissolves in random order, revealing the white website
         if (state.phase === "wipe" && state.wipeProgress >= 0) {
-          // Hold full sky-blue block grid briefly for first 12% of wipe, then dissolve in random order
           const dissolveP = Math.max(0, (state.wipeProgress - 0.12) / 0.88);
           const blockNative = 8; // 8 native pixels = 8*S CSS pixels
           const cols = Math.ceil(Wn / blockNative);
@@ -501,7 +580,6 @@ export default function LoadingScreen() {
                 const by = r * blockNative;
                 ctx.fillStyle = "#5C94FC";
                 ctx.fillRect(bx, by, blockNative, blockNative);
-                // Crisp 1-native-px block border so the square block grid is clearly defined
                 ctx.fillStyle = "#4B83EB";
                 ctx.fillRect(bx, by + blockNative - 1, blockNative, 1);
                 ctx.fillRect(bx + blockNative - 1, by, 1, blockNative);
@@ -524,9 +602,9 @@ export default function LoadingScreen() {
         );
         smoothCamX += (targetCamX - smoothCamX) * Math.min(1, dt * 12);
         const camX = Math.round(smoothCamX);
-        const stripTop = Hn - 216 + Math.round(state.camBounceY);
+        const stripTop = baseStripTop + Math.round(state.camBounceY);
 
-        // 1. Stepped sky bands (#5C94FC to #A6C8FF) filling from top of screen to bottom
+        // 1. Stepped sky bands (#5C94FC to #A6C8FF) filling from top of screen to ground line
         const skyColors = ["#5C94FC", "#6EA2FD", "#82B1FE", "#A6C8FF"];
         const skyBottom = stripTop + 168;
         for (let i = 0; i < 4; i++) {
@@ -548,7 +626,8 @@ export default function LoadingScreen() {
           const img = imageMap.get(c.sprite);
           if (img) {
             const drawX = Math.round(c.x - camX * 0.15);
-            const wrappedX = (((drawX + 120) % (Wn + 240)) + (Wn + 240)) % (Wn + 240) - 120;
+            const wrappedX =
+              (((drawX + 120) % (Wn + 240)) + (Wn + 240)) % (Wn + 240) - 120;
             const upperSkyH = Math.max(24, stripTop);
             const drawY = c.inStrip
               ? stripTop + c.stripY
@@ -575,7 +654,7 @@ export default function LoadingScreen() {
           }
         }
 
-        // 5. level-loading-decor.png (with static pit minicoins cleared)
+        // 5. level-loading-decor.png (contains NO coins)
         ctx.drawImage(decorCanvas, -camX, stripTop, 1920, 216);
 
         // Waving flag at x=1660, y=70 (4 frames)
@@ -585,47 +664,90 @@ export default function LoadingScreen() {
           ctx.drawImage(flagImg, 1660 - camX, stripTop + 70, 40, 100);
         }
 
-        // 6. Animated minicoin overlays over each pit (4 coins per pit in an arc, 4-frame spin at 8 fps)
+        // 6. Dynamic 12 gold mini coins from level-data.json -> loading.coins.items
+        // Check hero hitbox overlap and collect immediately on touch
+        const heroHitLeft = state.heroX - 11;
+        const heroHitRight = state.heroX + 11;
+        const heroHitTop = 168 - 44 + state.jumpOffsetY;
+        const heroHitBottom = 168 + state.jumpOffsetY;
+
+        for (const coin of miniCoins) {
+          if (!coin.collected) {
+            const overlapsX = heroHitRight >= coin.x && heroHitLeft <= coin.x + 14;
+            const overlapsY = heroHitBottom >= coin.y && heroHitTop <= coin.y + 18;
+            // Also collect if hero has already jumped past the coin's right edge
+            if ((overlapsX && overlapsY) || state.heroX >= coin.x + 12) {
+              coin.collected = true;
+              coin.collectedAt = elapsedSec;
+              playCoinKling();
+            }
+          }
+        }
+
         const minicoinSheet = imageMap.get("/environment/minicoin-sheet.png");
         if (minicoinSheet) {
           const mcFrame = Math.floor(elapsedSec * 8) % 4;
-          const pits = levelData.loading.pits || [
-            { startX: 256, width: 64 },
-            { startX: 544, width: 64 },
-            { startX: 832, width: 64 },
-          ];
-          for (const pit of pits) {
-            const cx = pit.startX + pit.width / 2;
-            const arcPositions = [
-              [cx - 24 - 7, 168 - 50],
-              [cx - 8 - 7, 168 - 66],
-              [cx + 8 - 7, 168 - 66],
-              [cx + 24 - 7, 168 - 50],
-            ];
-            for (const [mx, my] of arcPositions) {
+          for (const coin of miniCoins) {
+            if (!coin.collected) {
+              // Uncollected spinning gold mini coin
               ctx.drawImage(
                 minicoinSheet,
                 mcFrame * 14,
                 0,
                 14,
                 18,
-                Math.round(mx - camX),
-                stripTop + my,
+                Math.round(coin.x - camX),
+                stripTop + coin.y,
                 14,
                 18
               );
+            } else {
+              // Collected: pops up 10px and fades out over 180ms + twinkle (sparkle-1..4, 1x)
+              const age = elapsedSec - coin.collectedAt;
+              if (age >= 0 && age < 0.18) {
+                const p = age / 0.18;
+                const popY = Math.round(-10 * (1 - Math.pow(1 - p, 2)));
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, 1 - p);
+                ctx.drawImage(
+                  minicoinSheet,
+                  mcFrame * 14,
+                  0,
+                  14,
+                  18,
+                  Math.round(coin.x - camX),
+                  stripTop + coin.y + popY,
+                  14,
+                  18
+                );
+                ctx.restore();
+              }
+              if (age >= 0 && age < 0.24) {
+                const spIdx = Math.min(4, Math.floor((age / 0.24) * 4) + 1);
+                const spImg = imageMap.get(`/environment/sparkle-${spIdx}.png`);
+                if (spImg) {
+                  ctx.drawImage(
+                    spImg,
+                    Math.round(coin.x + 7 - 12 - camX),
+                    stripTop + coin.y + 9 - 12 - 6,
+                    24,
+                    24
+                  );
+                }
+              }
             }
           }
         }
 
-        // 7. level-loading-ground.png
+        // 7. level-loading-ground.png + extra ground rows below when screen is taller than the strip
         const groundImg = imageMap.get("/environment/level-loading-ground.png");
         if (groundImg) {
           ctx.drawImage(groundImg, -camX, stripTop, 1920, 216);
         }
+        const extraRowsBelow = drawGroundExtensionBelow(camX, stripTop, Wn, Hn);
 
         // 8. Large RAINBOW COIN hovering at x=1010, y=168-110=58
-        // (spin24-rainbow.png, 24 frames of 27x35, shown at integer scale 2*S = 54x70 strip units, 1.0s per rotation)
+        // (spin24-rainbow.png, 24 frames of 35x35, drawn at 2x native = 70x70 world px, 1.0s per rotation, steps(24))
         if (!state.coinCollected) {
           const spinRainbow = imageMap.get("/coins/spin24-rainbow.png");
           if (spinRainbow) {
@@ -633,13 +755,13 @@ export default function LoadingScreen() {
             const bobY = Math.round(Math.sin(elapsedSec * 4) * 2);
             ctx.drawImage(
               spinRainbow,
-              coinFrame * 27,
+              coinFrame * 35,
               0,
-              27,
               35,
-              Math.round(1010 - 27 - camX),
+              35,
+              Math.round(1010 - 35 - camX),
               stripTop + (168 - 110) + bobY,
-              54,
+              70,
               70
             );
           }
@@ -661,9 +783,7 @@ export default function LoadingScreen() {
             state.phase === "jump3" ||
             state.phase === "leapCoin"
           ) {
-            // Frame 7 while rising, Frame 8 while descending
             const prevY = state.jumpOffsetY;
-            // Check phase midpoint
             let rising = true;
             if (state.phase === "jump1") rising = t < 2.2;
             else if (state.phase === "jump2") rising = t < 4.2;
@@ -709,7 +829,7 @@ export default function LoadingScreen() {
           }
         }
 
-        // 10. Coin pickup effects: sparkle-1..4 burst + text-plus1 (+1)
+        // 10. Rainbow Coin pickup effects: sparkle-1..4 burst + text-plus1 (+1)
         if (state.sparkleProgress >= 0 && state.sparkleProgress < 1) {
           const spFrame = Math.min(4, Math.floor(state.sparkleProgress * 4) + 1);
           const spImg = imageMap.get(`/environment/sparkle-${spFrame}.png`);
@@ -745,25 +865,26 @@ export default function LoadingScreen() {
           ctx.fillRect(0, 0, Wn, Hn);
         }
 
-        // 12. HUGE METEOR (8.4-10.4s): meteor-1..3 (190x120 native), loop at 12 fps, scale 2*S (= 380x240 strip units)
+        // 12. HUGE METEOR (8.4-10.4s): meteor-1..3 (190x120 native), loop at 12 fps, scale 2*S, capped so never wider than viewport
         if (state.meteorProgress >= 0 && state.meteorProgress <= 1) {
           const mFrame = (Math.floor(elapsedSec * 12) % 3) + 1;
           const mImg = imageMap.get(`/environment/meteor-${mFrame}.png`);
           if (mImg) {
             const p = state.meteorProgress;
+            const meteorW = Math.min(380, Wn);
+            const meteorH = Math.round(meteorW * (120 / 190));
             const targetHeadX = Math.round(state.heroX - camX);
             const targetHeadY = stripTop + 160;
             const startHeadX = Wn + 24;
-            const startHeadY = -8;
+            const startHeadY = Math.max(-8, stripTop - 100);
             const curHeadX = Math.round(startHeadX + (targetHeadX - startHeadX) * p);
             const curHeadY = Math.round(startHeadY + (targetHeadY - startHeadY) * p);
-            // Head is bottom-left of the 380x240 scaled meteor sprite
             ctx.drawImage(
               mImg,
-              curHeadX - 38,
-              curHeadY - 210,
-              380,
-              240
+              curHeadX - Math.round(meteorW * 0.1),
+              curHeadY - Math.round(meteorH * 0.88),
+              meteorW,
+              meteorH
             );
           }
         }
@@ -787,7 +908,6 @@ export default function LoadingScreen() {
               );
             }
           } else {
-            // Smoke dims out from 0.55..1.0
             const smokeAlpha = Math.max(0, 1 - (ep - 0.55) / 0.45);
             const eImg5 = imageMap.get("/environment/explosion-5.png");
             if (eImg5 && smokeAlpha > 0) {
@@ -827,6 +947,19 @@ export default function LoadingScreen() {
             containerRef.current.style.transform = "translate3d(0, 0, 0)";
           }
         }
+
+        // Expose live telemetry on canvas dataset for verification checks
+        const collectedCount = miniCoins.filter((c) => c.collected).length;
+        canvas.dataset.scaleS = String(S);
+        canvas.dataset.nativeW = String(Wn);
+        canvas.dataset.nativeH = String(Hn);
+        canvas.dataset.stripTop = String(stripTop);
+        canvas.dataset.extraRowsBelow = String(extraRowsBelow);
+        canvas.dataset.isTallLetterbox = String(isTallLetterbox);
+        canvas.dataset.totalMiniCoins = String(miniCoins.length);
+        canvas.dataset.collectedMiniCoins = String(collectedCount);
+        canvas.dataset.heroX = String(Math.round(state.heroX));
+        canvas.dataset.rainbowCollected = String(state.coinCollected);
 
         rafId = requestAnimationFrame(renderLoop);
       };
@@ -873,7 +1006,7 @@ export default function LoadingScreen() {
         reducedFadeOut ? "opacity-0" : "opacity-100"
       } ${isWiping ? "bg-transparent" : "mario-sky-bands"}`}
     >
-      {/* Full-viewport Pixel Canvas aligned to bottom */}
+      {/* Full-viewport Pixel Canvas */}
       <canvas
         ref={canvasRef}
         className="w-full h-full block pixel-art pointer-events-none"

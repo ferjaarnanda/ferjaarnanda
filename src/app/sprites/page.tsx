@@ -112,8 +112,8 @@ export default function SpritesPreviewPage() {
           1. Coins — 24-Frame 3D Spin Sheets &amp; Tier Classes
         </h2>
         <p className="text-sm text-muted mb-6">
-          Sheet <code>spin24-*.png</code> (648×35 native, 24 frame @ 27×35,{" "}
-          <code>steps(24)</code>, <code>--s: 4</code> = 4× native 27×35 coin).
+          Sheet <code>spin24-*.png</code> (840×35 native, 24 frame @ 35×35,{" "}
+          <code>steps(24)</code>, <code>--s: 4</code> = 4× native 35×35 coin).
         </p>
 
         <div className="mario-zone grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">

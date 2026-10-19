@@ -6,17 +6,102 @@
   --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-press-start-2p: 'Press Start 2P', monospace;
   --cap-pad: 56px;
+  --cap-inset: 480px;
+  --cap-width: 480px;
 }
 
 @media (max-width: 1023px) {
   :root {
     --cap-pad: 20px;
+    --cap-inset: 45px;
+    --cap-width: 300px;
   }
 }
 
+/* Navbar Morph Styles (Section 5.2) */
+.nav-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  height: 88px;
+  pointer-events: none;
+  contain: layout paint;
+}
+
+.nav-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 88px;
+  background-color: #E52521;
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  clip-path: inset(0px 0px 24px 0px round 0px);
+  pointer-events: auto;
+  transition: clip-path 480ms cubic-bezier(.22, 1, .36, 1), background-color 480ms ease;
+}
+
+.nav-bg.is-scrolled {
+  background-color: rgba(229, 37, 33, 0.78);
+  clip-path: inset(16px var(--cap-inset, 480px) 16px var(--cap-inset, 480px) round 28px);
+}
+
+.nav-bg.is-transitioning {
+  will-change: clip-path;
+}
+
+.nav-ring {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 56px;
+  width: var(--cap-width, 480px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 150ms ease 0ms;
+}
+
+.nav-ring.is-scrolled {
+  opacity: 1;
+  transition: opacity 250ms ease 180ms;
+}
+
+.nav-link-row {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(0px);
+  transition: transform 480ms cubic-bezier(.22, 1, .36, 1);
+}
+
+.nav-link-row.is-scrolled {
+  transform: translateX(-50%) translateY(12px);
+}
+
 @supports not (backdrop-filter: blur(16px)) {
-  .nav-capsule-bg {
+  .nav-bg.is-scrolled {
     background-color: rgba(229, 37, 33, 0.92) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-bg,
+  .nav-ring,
+  .nav-link-row {
+    transition: none !important;
   }
 }
 
@@ -148,16 +233,16 @@ section[id] {
 
 @keyframes coin-spin {
   to {
-    background-position-x: calc(-648px * var(--s));
+    background-position-x: calc(-840px * var(--s));
   }
 }
 
 .mario-zone .coin,
 .mario-zone .coin-sprite {
   --s: 6;
-  width: calc(27px * var(--s));
+  width: calc(35px * var(--s));
   height: calc(35px * var(--s));
-  background: url('/coins/spin24-gold.png') 0 0 / calc(648px * var(--s)) calc(35px * var(--s)) no-repeat;
+  background: url('/coins/spin24-gold.png') 0 0 / calc(840px * var(--s)) calc(35px * var(--s)) no-repeat;
   image-rendering: pixelated;
   animation: coin-spin 1.2s steps(24) infinite;
   transition: transform 150ms ease;

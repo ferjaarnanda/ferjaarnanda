@@ -41,7 +41,61 @@
    "frames": "flag-1..4"
   },
   "sequence": "run -> jump pit1 -> pit2 -> pit3 -> collect rainbow coin (x~1080) -> meteor from top right -> impact -> wipe. Pipes/stairs/flag are scenery at the end of the strip.",
-  "note": "bushes re-grounded; none over pits"
+  "note": "bushes re-grounded; none over pits",
+  "coins": {
+   "sprite": "minicoin-sheet.png (4 frames of 14x18)",
+   "items": [
+    {
+     "x": 257,
+     "y": 116
+    },
+    {
+     "x": 273,
+     "y": 100
+    },
+    {
+     "x": 289,
+     "y": 100
+    },
+    {
+     "x": 305,
+     "y": 116
+    },
+    {
+     "x": 545,
+     "y": 116
+    },
+    {
+     "x": 561,
+     "y": 100
+    },
+    {
+     "x": 577,
+     "y": 100
+    },
+    {
+     "x": 593,
+     "y": 116
+    },
+    {
+     "x": 833,
+     "y": 116
+    },
+    {
+     "x": 849,
+     "y": 100
+    },
+    {
+     "x": 865,
+     "y": 100
+    },
+    {
+     "x": 881,
+     "y": 116
+    }
+   ],
+   "note": "level-loading-decor.png contains NO coins; draw these dynamically so each can be collected and removed"
+  }
  },
  "jenis": {
   "width": 640,
