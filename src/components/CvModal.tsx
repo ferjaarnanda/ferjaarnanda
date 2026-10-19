@@ -118,7 +118,7 @@ export default function CvModal({ isOpen, onClose }: CvModalProps) {
 
             {/* Modal Title (visually accessible) */}
             <h2 id="cv-modal-title" className="text-base font-bold text-obsidian mb-3 self-start pr-8">
-              Curriculum Vitae — Ferja Arnanda
+              Hayoo penasaran yaaa 
             </h2>
 
             {/* Document Page inside modal with <object> and fallback */}
