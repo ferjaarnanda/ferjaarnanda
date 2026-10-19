@@ -4,8 +4,16 @@ import React, { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { services } from "@/data/services";
 import levelData from "../../public/environment/level-data.json";
+import plantRigData from "../../public/environment/plant-rig.json";
+import {
+  isSfxMuted,
+  playBoomSfx,
+  playCoinKling,
+  playCrunchSfx,
+  toggleSfxMuted,
+} from "@/lib/sfx";
 
-// World & Object Constants from level-data.json -> console
+// World & Object Constants from level-data.json -> console & plant-rig.json
 const CONSOLE_DATA = levelData.console;
 const WORLD_W = CONSOLE_DATA.world.width; // 480
 const WORLD_H = CONSOLE_DATA.world.height; // 216
@@ -26,6 +34,17 @@ const PIPE2_SURF_Y = PIPE2.top + 1; // 123
 const PIPE3_SURF_Y = PIPE3.top + 1; // 107
 
 const PLANT_CFG = CONSOLE_DATA.plant; // { x: 407, hiddenTop: 130, raisedTop: 70, clipY: 134 }
+const HEAD_CELL = plantRigData.head.cell; // 88
+const HEAD_PIVOT_X = plantRigData.head.pivot[0]; // 44
+const HEAD_PIVOT_Y = plantRigData.head.pivot[1]; // 44
+
+// Mouth pivot P0 = center of the medium pipe's top lip (x=423, y=124)
+const P0_X = PIPE2_CENTER_X; // 423
+const P0_Y = PIPE2.top + 2; // 124
+const PLANT_RAISED_PIVOT_Y = P0_Y - 30; // 94
+const PLANT_HIDDEN_PIVOT_Y = 172; // completely below clipY=134 even with 36px upward lips
+const PLANT_MAX_REACH = 110; // max reach 110px from P0
+
 const BLOCKS_ROW = CONSOLE_DATA.blocks.row; // { x: 216, y: 88, pattern: "BBQBB", tile: 16 }
 const QBLOCK_X = BLOCKS_ROW.x + 2 * BLOCKS_ROW.tile; // 248
 const QBLOCK_CENTER_X = QBLOCK_X + 8; // 256
@@ -46,7 +65,7 @@ const WALK_SPEED = 70; // px/s
 const WALK_FPS = 9;
 const WALK_FRAMES = [2, 3, 4, 5] as const;
 const HOP_DURATION = 0.5; // s
-const PIPE1_GROUND_TAKEOFF_X = 344; // left of Pipe 1 (344 + 9 = 353 < 367)
+const PIPE1_GROUND_TAKEOFF_X = 344; // left of Pipe 1
 
 interface SolidBox {
   id: string;
@@ -104,7 +123,24 @@ const INITIAL_CLOUDS: CloudDef[] = [
   { key: "cloud-s", w: 44, h: 30, x: 420, y: 34, speed: 9.5 },
 ];
 
-type PlantPhase = "HIDDEN" | "RISING" | "CHOMPING" | "RETRACTING" | "FAST_RETRACT";
+type PlantPhase =
+  | "HIDDEN"
+  | "RISING"
+  | "AMBUSH_RISE"
+  | "CHOMPING"
+  | "AIMING"
+  | "RETRACTING"
+  | "OUCH_SQUASH"
+  | "OUCH_DIZZY"
+  | "OUCH_DROOP"
+  | "DEVOUR_LUNGE"
+  | "DEVOUR_BITE"
+  | "DEVOUR_PULLBACK"
+  | "DEVOUR_CHEW"
+  | "DEVOUR_METEOR"
+  | "DEVOUR_EXPLODE"
+  | "SPIT_DEAD";
+
 type CoinState = "NONE" | "RISING" | "HOVERING" | "SINKING";
 type RainbowState = "NONE" | "RAINBOW" | "BLINK";
 
@@ -134,7 +170,9 @@ type RoutePhase =
   | "HOP_BLOCKS_TO_GROUND"
   | "DRAGGING"
   | "AIR_FALL"
-  | "WAIT_RESUME";
+  | "WAIT_RESUME"
+  | "EATEN_HIDDEN"
+  | "SPAT_OUT_ARC";
 
 interface TrailGhost {
   x: number;
@@ -151,6 +189,8 @@ interface BoomEffect {
   y: number;
   age: number;
   duration: number;
+  scale: number; // 1 = 36x36 world px, 2 = 72x72 world px
+  maxFrames: number; // 5 normal, 3 for spit death
 }
 
 interface SparkleBurst {
@@ -167,6 +207,66 @@ interface PlusOneEffect {
   duration: number;
 }
 
+interface SmokePuff {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  age: number;
+  duration: number;
+}
+
+interface CrumbParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  color: string;
+  age: number;
+  duration: number;
+}
+
+interface MunchStar {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  age: number;
+  duration: number;
+}
+
+// Quantize angle in degrees (-135..135, step 15, 0 = straight up, + = clockwise/right)
+function quantizePlantAngle(deg: number): { row: number; quantizedDeg: number } {
+  const clamped = Math.max(-135, Math.min(135, deg));
+  const step = Math.max(-9, Math.min(9, Math.round(clamped / 15)));
+  return {
+    row: step + 9,
+    quantizedDeg: step * 15,
+  };
+}
+
+// Compute angle (deg) from (ox, oy) to (tx, ty) where 0 = straight UP and positive = clockwise (right)
+function computeAimAngleDeg(ox: number, oy: number, tx: number, ty: number): number {
+  const dx = tx - ox;
+  const dy = ty - oy;
+  if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return 0;
+  return (Math.atan2(dx, -dy) * 180) / Math.PI;
+}
+
+// Shortest distance from an axis-aligned box [x1,x2]x[y1,y2] to a point (px, py)
+function distRectToPoint(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  px: number,
+  py: number
+): number {
+  const cx = Math.max(x1, Math.min(x2, px));
+  const cy = Math.max(y1, Math.min(y2, py));
+  return Math.hypot(px - cx, py - cy);
+}
+
 export default function MarioConsoleSection() {
   const prefersReducedMotion = useReducedMotion();
 
@@ -178,6 +278,11 @@ export default function MarioConsoleSection() {
     k: 2,
     wn: 400,
   });
+  const [muted, setMuted] = useState<boolean>(false);
+
+  useEffect(() => {
+    setMuted(isSfxMuted());
+  }, []);
 
   // Measure frame width and compute integer scale K & native width Wn
   useEffect(() => {
@@ -189,7 +294,7 @@ export default function MarioConsoleSection() {
       const borderW = 8; // 4px outline left + 4px right
       const availInner = Math.max(320, parentW - borderW);
       const isDesktop = window.innerWidth >= 1024;
-      const k = isDesktop || availInner >= 640 ? 2 : 1;
+      const k = isDesktop || availInner >= 480 ? 2 : 1;
       const wn = Math.max(320, Math.min(WORLD_W, Math.floor(availInner / k)));
       setLayoutState((prev) => (prev.k === k && prev.wn === wn ? prev : { k, wn }));
     };
@@ -221,7 +326,7 @@ export default function MarioConsoleSection() {
     const maxHeroX = WORLD_W - HITBOX_HALF_W;
     const farLeftWalkX = Math.max(minHeroX + 4, viewLeft + 28);
 
-    // Load all image sprites
+    // Load all image sprites (including new plant rig + fx sprites + meteor)
     const imgPaths: Record<string, string> = {
       hillsFar: "/environment/bg-hills-far.png",
       consoleBack: "/environment/console-back.png",
@@ -231,10 +336,15 @@ export default function MarioConsoleSection() {
       pipeShort: "/environment/pipe-short.png",
       pipeMedium: "/environment/pipe-medium.png",
       pipeTall: "/environment/pipe-tall.png",
-      plant1: "/environment/plant-1.png",
-      plant2: "/environment/plant-2.png",
-      plant3: "/environment/plant-3.png",
-      plant4: "/environment/plant-4.png",
+      plantHeadSheet: `/environment/${plantRigData.head.file}`,
+      stemBead: "/environment/stem-bead.png",
+      plantLeaves: "/environment/plant-leaves.png",
+      fxStar: "/environment/fx-star.png",
+      fxBump: "/environment/fx-bump.png",
+      fxSmoke: "/environment/fx-smoke-sheet.png",
+      meteor1: "/environment/meteor-1.png",
+      meteor2: "/environment/meteor-2.png",
+      meteor3: "/environment/meteor-3.png",
       cloudXs: "/environment/cloud-xs.png",
       cloudS: "/environment/cloud-s.png",
       cloudM: "/environment/cloud-m.png",
@@ -277,6 +387,7 @@ export default function MarioConsoleSection() {
     let facing: 1 | -1 = 1;
     let heroFrame = 0;
     let activeBubble: "none" | "question" | "exclaim" = "none";
+    let heroHiddenByPlant = false;
 
     // Hop endpoints
     let hopX0 = farLeftWalkX;
@@ -286,14 +397,42 @@ export default function MarioConsoleSection() {
     let hopApexY = PIPE1_SURF_Y - 20;
     let hopNextPhase: RoutePhase = "STEP3_P1_BEAT";
 
-    // Plant state
+    // Plant Rig state
     let plantPhase: PlantPhase = "HIDDEN";
     let plantTimer = 0.4;
-    let plantY = PLANT_CFG.hiddenTop; // 130
-    let plantRetractStartY = PLANT_CFG.raisedTop; // 70
-    let plantFrame = 1;
+    let plantHeadX = P0_X; // 423
+    let plantHeadY = PLANT_HIDDEN_PIVOT_Y; // 172
+    let plantStartX = P0_X;
+    let plantStartY = PLANT_RAISED_PIVOT_Y;
+    let plantLungeTargetX = P0_X;
+    let plantLungeTargetY = PLANT_RAISED_PIVOT_Y;
+    let plantAngleDeg = 0; // continuous angle in degrees (-135..135)
+    let plantTargetAngleDeg = 0;
+    let plantBaseAngleDeg = 0;
+    let plantMouthFrame = 0; // 0 closed, 1 half, 2 wide open, 3 snap
+    let plantSquashY = 0; // +3px during OUCH_SQUASH
+    let plantHeadScale = 1; // shrinks during SPIT_DEAD
+    let plantGrayWhiteTimer = 0; // 150ms gray-white during SPIT_DEAD
+    let plantExtraDroop = 0;
     let plantRouteLock = false;
     let nextPlantHiddenWait = 1.5;
+    let ambushLingerTimer = 0;
+    let chewCrumbAccum = 0;
+    let meteorProgress = 0; // 0..1 during DEVOUR_METEOR
+    let devourCount = 0;
+    let ouchCount = 0;
+    let spitCount = 0;
+
+    // White screen flash & shake state
+    let flashAlpha = 0;
+    let flashDuration = 0.2;
+    let flashTimer = 0;
+    let doubleFlashActive = false;
+    let doubleFlashTimer = 0;
+    let frameNudgeTimer = 0;
+    let frameNudgeAmplitude = 2;
+    let shakeTimer = 0;
+    let shakeAmplitude = 3;
 
     // Question Block & Rainbow Coin state
     let bumpTimer = -1; // >= 0 while bumping (0..0.24s)
@@ -304,9 +443,10 @@ export default function MarioConsoleSection() {
     let coinSpinTime = 0;
     let collectCount = 0;
 
-    // Rainbow mode & trail state
+    // Rainbow mode & blink state
     let rainbowState: RainbowState = "NONE";
     let rainbowTimer = 0;
+    let blinkDuration = 1.0; // exactly 1.0s
     let trailSpawnAccum = 0;
     const trailGhosts: TrailGhost[] = [];
 
@@ -314,9 +454,11 @@ export default function MarioConsoleSection() {
     const booms: BoomEffect[] = [];
     const sparkles: SparkleBurst[] = [];
     const plusOnes: PlusOneEffect[] = [];
+    const smokePuffs: SmokePuff[] = [];
+    const crumbs: CrumbParticle[] = [];
+    const munchStars: MunchStar[] = [];
     let totalBooms = 0;
     let lastTapBoomMs = 0;
-    let frameNudgeTimer = 0;
 
     // Clouds state
     const clouds = INITIAL_CLOUDS.map((c) => ({ ...c }));
@@ -351,12 +493,44 @@ export default function MarioConsoleSection() {
       phaseTimer = 0;
     };
 
+    const spawnSmokePuff = (x: number, y: number, vx = 0, vy = -18, duration = 0.5) => {
+      smokePuffs.push({ x, y, vx, vy, age: 0, duration });
+    };
+
+    const spawnChewCrumbsAndStars = (hx: number, hy: number) => {
+      const colors = ["#E52521", "#2563EB", "#FFFFFF"];
+      for (let i = 0; i < 3; i++) {
+        const ang = -Math.PI * 0.8 + (Math.random() - 0.5) * 1.8;
+        const spd = 28 + Math.random() * 34;
+        crumbs.push({
+          x: hx + (Math.random() - 0.5) * 10,
+          y: hy - 6 + (Math.random() - 0.5) * 8,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd - 20,
+          color: colors[i % colors.length],
+          age: 0,
+          duration: 0.45,
+        });
+      }
+      // 2 tiny fx-star munch stars pop
+      for (let s = 0; s < 2; s++) {
+        const dir = s === 0 ? -1 : 1;
+        munchStars.push({
+          x: hx + dir * (14 + Math.random() * 6),
+          y: hy - 14 - Math.random() * 8,
+          vx: dir * (16 + Math.random() * 10),
+          vy: -22 - Math.random() * 10,
+          age: 0,
+          duration: 0.38,
+        });
+      }
+    };
+
     const triggerBlockBump = () => {
       if (bumpTimer < 0) {
         bumpTimer = 0;
         bumpCount += 1;
       }
-      // Spawn rainbow coin only if no coin is active and hero is not in rainbow/blink mode
       if (coinState === "NONE" && rainbowState === "NONE") {
         coinState = "RISING";
         coinTimer = 0;
@@ -427,7 +601,6 @@ export default function MarioConsoleSection() {
                 heroY = sol.y1;
                 landedOn = sol.id;
               } else if (sy < 0) {
-                // Moving up into underside of solid
                 if (
                   sol.id === "blocks" &&
                   rightX > QBLOCK_X - 2 &&
@@ -456,7 +629,6 @@ export default function MarioConsoleSection() {
         }
       }
 
-      // Check if hero moved away from underside of ? block so he can bump it again
       const curLeftX = heroX - HITBOX_HALF_W;
       const curRightX = heroX + HITBOX_HALF_W;
       const underQBlock =
@@ -465,15 +637,11 @@ export default function MarioConsoleSection() {
         Math.abs(heroY - HITBOX_H - BLOCKS_BOTTOM_Y) <= 2.5;
       if (!underQBlock) {
         wasTouchingQBlockUnderside = false;
-      } else if (
-        !wasTouchingQBlockUnderside &&
-        upwardSpeedForBump >= 60
-      ) {
+      } else if (!wasTouchingQBlockUnderside && upwardSpeedForBump >= 60) {
         wasTouchingQBlockUnderside = true;
         triggerBlockBump();
       }
 
-      // Check what surface the hero is resting on (within 0.5px)
       if (!landedOn) {
         const leftX = heroX - HITBOX_HALF_W;
         const rightX = heroX + HITBOX_HALF_W;
@@ -487,7 +655,6 @@ export default function MarioConsoleSection() {
         }
       }
 
-      // Verify zero solid penetration
       const checkLeft = heroX - HITBOX_HALF_W + 0.05;
       const checkRight = heroX + HITBOX_HALF_W - 0.05;
       const checkTop = heroY - HITBOX_H + 0.05;
@@ -536,9 +703,11 @@ export default function MarioConsoleSection() {
         heroY = PIPE1_SURF_Y;
         facing = 1;
         if (plantPhase !== "HIDDEN" || plantTimer >= 1.0) {
-          if (plantPhase === "HIDDEN") {
+          if (plantPhase === "HIDDEN" && nextPlantHiddenWait <= 1.5) {
             plantPhase = "RISING";
             plantTimer = 0;
+            plantStartX = P0_X;
+            plantStartY = PLANT_HIDDEN_PIVOT_Y;
           }
           routePhase = "STEP3_P1_STARTLED";
           heroFrame = 14;
@@ -549,7 +718,6 @@ export default function MarioConsoleSection() {
           heroFrame = 10;
         }
       } else if (surf === "pipe2") {
-        // On pipe 2 -> go to pipe 3 (step 4)
         plantRouteLock = true;
         heroX = PIPE2_CENTER_X;
         heroY = PIPE2_SURF_Y;
@@ -557,7 +725,6 @@ export default function MarioConsoleSection() {
         routePhase = "STEP4_P2_BEAT";
         heroFrame = 10;
       } else if (surf === "pipe3") {
-        // On pipe 3 -> step 5
         plantRouteLock = false;
         heroX = PIPE3_CENTER_X;
         heroY = PIPE3_SURF_Y;
@@ -566,7 +733,6 @@ export default function MarioConsoleSection() {
         heroFrame = 11;
         activeBubble = "question";
       } else if (surf === "blocks") {
-        // On top of bricks/blocks -> hop down to the ground, then step 2 or 7 by position
         const targetGroundX = Math.max(
           farLeftWalkX,
           Math.min(PIPE1_GROUND_TAKEOFF_X, heroX + (resumeLastDir >= 0 ? 28 : -28))
@@ -581,7 +747,6 @@ export default function MarioConsoleSection() {
         );
         routePhase = "HOP_BLOCKS_TO_GROUND";
       } else {
-        // Ground left of pipe 1 -> step 2
         heroY = GROUND_Y;
         if (heroX > PIPE1_GROUND_TAKEOFF_X + 2) {
           routePhase = "STEP7_WALK_LEFT";
@@ -593,16 +758,24 @@ export default function MarioConsoleSection() {
       }
     };
 
-    const spawnBoom = (wx: number, wy: number, bypassThrottle = false) => {
+    const spawnBoom = (
+      wx: number,
+      wy: number,
+      bypassThrottle = false,
+      scale = 1,
+      maxFrames = 5
+    ) => {
       const now = performance.now();
       if (!bypassThrottle && now - lastTapBoomMs < 80) return;
       lastTapBoomMs = now;
       if (booms.length >= 6) {
         booms.shift();
       }
-      booms.push({ x: wx, y: wy, age: 0, duration: 0.45 });
+      booms.push({ x: wx, y: wy, age: 0, duration: 0.45, scale, maxFrames });
       totalBooms += 1;
       frameNudgeTimer = 0.1;
+      frameNudgeAmplitude = scale >= 2 ? 3 : 2;
+      playBoomSfx();
     };
 
     const collectRainbowCoin = () => {
@@ -614,12 +787,12 @@ export default function MarioConsoleSection() {
 
       sparkles.push({ x: cx, y: cy, age: 0, duration: 0.4 });
       plusOnes.push({ x: cx - 9, y: coinY - 4, age: 0, duration: 0.65 });
+      playCoinKling();
 
       rainbowState = "RAINBOW";
       rainbowTimer = 0;
       trailSpawnAccum = 0;
 
-      // During 15s rainbow mode he CANNOT be grabbed and his autonomous route keeps running
       if (isDragging) {
         isDragging = false;
         activePointerId = null;
@@ -636,13 +809,91 @@ export default function MarioConsoleSection() {
       }
     };
 
+    // Start the DEVOUR SEQUENCE (Stage 1: LUNGE 0.2s ease-out to hero's CURRENT position)
+    const startDevourSequence = () => {
+      devourCount += 1;
+      plantPhase = "DEVOUR_LUNGE";
+      plantTimer = 0;
+      plantStartX = plantHeadX;
+      plantStartY = plantHeadY;
+
+      const hx = heroX;
+      const hy = heroY - 21;
+      const dx = hx - P0_X;
+      const dy = hy - P0_Y;
+      const distFromP0 = Math.hypot(dx, dy);
+      const scale = distFromP0 > PLANT_MAX_REACH ? PLANT_MAX_REACH / distFromP0 : 1;
+      plantLungeTargetX = P0_X + dx * scale;
+      plantLungeTargetY = Math.min(GROUND_Y - 12, P0_Y + dy * scale);
+      plantTargetAngleDeg = computeAimAngleDeg(
+        P0_X,
+        PLANT_RAISED_PIVOT_Y,
+        plantLungeTargetX,
+        plantLungeTargetY
+      );
+      plantAngleDeg = plantTargetAngleDeg;
+      plantMouthFrame = 2; // mouth wide open
+    };
+
+    // Start NORMAL TAP = "OUCH" reaction
+    const triggerPlantOuch = () => {
+      ouchCount += 1;
+      plantPhase = "OUCH_SQUASH";
+      plantTimer = 0;
+      plantSquashY = 3; // squashes down 3px for 80ms
+      plantMouthFrame = 1;
+      plantBaseAngleDeg = plantAngleDeg;
+      nextPlantHiddenWait = 4.0; // NEXT hidden period is 4s
+      playCrunchSfx();
+    };
+
+    // Start TAP DURING CHEW = "DEATH + SPIT" reaction (meteor skipped!)
+    const triggerPlantDeathAndSpit = () => {
+      spitCount += 1;
+      plantPhase = "SPIT_DEAD";
+      plantTimer = 0;
+      plantStartX = plantHeadX;
+      plantStartY = plantHeadY;
+      plantGrayWhiteTimer = 0.15; // gray-white for 150ms
+      plantHeadScale = 1.0;
+      nextPlantHiddenWait = 8.0; // plant returns after 8s
+
+      // Two white flashes (100ms each) + 0.3s shake of +-3px
+      doubleFlashActive = true;
+      doubleFlashTimer = 0;
+      shakeTimer = 0.3;
+      shakeAmplitude = 3;
+
+      // 3 smoke puffs + explosion-1..3 at scale 1
+      spawnSmokePuff(plantHeadX - 10, plantHeadY - 8, -14, -22, 0.55);
+      spawnSmokePuff(plantHeadX + 10, plantHeadY - 6, 14, -24, 0.55);
+      spawnSmokePuff(plantHeadX, plantHeadY - 16, 0, -28, 0.6);
+      spawnBoom(plantHeadX, plantHeadY - 6, true, 1, 3);
+
+      // Spit the hero out of the mouth: startled frame 14 WITHOUT bubble, parabolic arc landing ~60px left
+      heroHiddenByPlant = false;
+      isDragging = false;
+      activePointerId = null;
+      const landX = Math.max(farLeftWalkX, Math.min(PIPE1_GROUND_TAKEOFF_X + 10, plantHeadX - 65));
+      hopX0 = plantHeadX;
+      hopY0 = plantHeadY;
+      hopX1 = landX;
+      hopY1 = GROUND_Y;
+      hopApexY = Math.min(plantHeadY, GROUND_Y) - 28;
+      routePhase = "SPAT_OUT_ARC";
+      phaseTimer = 0;
+      facing = -1;
+      heroFrame = 14; // startled frame 14 WITHOUT bubble
+      activeBubble = "none";
+    };
+
     // Fixed 60 Hz simulation step (dt = 1/60s)
     const stepPhysics = (dt: number) => {
       simTime += dt;
       const prevHeroX = heroX;
       const prevHeroY = heroY;
 
-      // 1. Update Clouds (ambient animation paused if prefersReducedMotion)
+      // 1. Update Clouds
       if (!prefersReducedMotion) {
         for (let i = 0; i < clouds.length; i++) {
           const c = clouds[i];
@@ -653,88 +904,475 @@ export default function MarioConsoleSection() {
         }
       }
 
-      // 2. Update Chomper Plant (medium pipe x=407, clipped at y=134)
-      // Forced hidden while hero stands on medium pipe or within 24px horizontally of it
-      const isHeroNearMediumPipe =
-        Math.abs(heroX - PIPE2_CENTER_X) <= 24 || plantRouteLock;
+      // Determine whether the hero is currently user-controlled (eligible for plant aiming/attack)
+      // "The plant attacks only a hero that the user controls: while he is held, while he is falling
+      // after a release, and for 2.5s after a release (never during the autonomous route)."
+      // Also during the 1s BLINK and 15s RAINBOW mode he cannot be eaten.
+      const isUserControlled =
+        !heroHiddenByPlant &&
+        rainbowState === "NONE" &&
+        (isDragging || routePhase === "AIR_FALL" || routePhase === "WAIT_RESUME");
 
-      if (prefersReducedMotion && plantPhase !== "FAST_RETRACT") {
-        plantPhase = "HIDDEN";
-        plantY = PLANT_CFG.hiddenTop;
-        plantFrame = 1;
-      } else {
-        plantTimer += dt;
-        if (plantPhase === "HIDDEN") {
-          plantY = PLANT_CFG.hiddenTop;
-          plantFrame = 1;
-          if (isHeroNearMediumPipe) {
+      // Autonomous route safety gating: while following autonomous route, plant is harmless and forced hidden
+      // while hero stands on medium pipe or within 24px of it
+      const isAutonomousNearPlant =
+        !isUserControlled &&
+        !heroHiddenByPlant &&
+        (Math.abs(heroX - PIPE2_CENTER_X) <= 24 || plantRouteLock);
+
+      const heroCenterX = heroX;
+      const heroCenterY = heroY - 21;
+
+      // Check distance from hero hitbox [heroX-9, heroX+9] x [heroY-42, heroY] to plant head
+      const checkHeroTouchesPlantHead = (): boolean => {
+        if (!isUserControlled) return false;
+        const dPivot = distRectToPoint(
+          heroX - HITBOX_HALF_W,
+          heroY - HITBOX_H,
+          heroX + HITBOX_HALF_W,
+          heroY,
+          plantHeadX,
+          plantHeadY
+        );
+        return dPivot <= 28;
+      };
+
+      // 2. Update Chomper Plant Rig State Machine
+      plantTimer += dt;
+      if (plantGrayWhiteTimer > 0) {
+        plantGrayWhiteTimer = Math.max(0, plantGrayWhiteTimer - dt);
+      }
+
+      switch (plantPhase) {
+        case "HIDDEN": {
+          plantHeadX = P0_X;
+          plantHeadY = PLANT_HIDDEN_PIVOT_Y;
+          plantAngleDeg = 0;
+          plantTargetAngleDeg = 0;
+          plantMouthFrame = 0;
+          plantSquashY = 0;
+          plantHeadScale = 1;
+          plantExtraDroop = 0;
+
+          // Ambush check: "If the held hero lingers within 70px of the mouth for 0.6s while the plant is hidden,
+          // the plant ambushes: it rises in 0.2s and aims."
+          const distToMouth = Math.hypot(heroCenterX - P0_X, heroCenterY - P0_Y);
+          if (isDragging && rainbowState === "NONE" && distToMouth <= 70) {
+            ambushLingerTimer += dt;
+            if (ambushLingerTimer >= 0.6) {
+              ambushLingerTimer = 0;
+              nextPlantHiddenWait = 1.5;
+              plantPhase = "AMBUSH_RISE";
+              plantTimer = 0;
+              plantStartX = P0_X;
+              plantStartY = PLANT_HIDDEN_PIVOT_Y;
+              break;
+            }
+          } else {
+            ambushLingerTimer = 0;
+          }
+
+          if (prefersReducedMotion) {
+            break;
+          }
+
+          if (isAutonomousNearPlant) {
             plantTimer = Math.min(plantTimer, 0.5);
           } else if (plantTimer >= nextPlantHiddenWait) {
-            nextPlantHiddenWait = 1.5; // reset to normal 1.5s rhythm
+            nextPlantHiddenWait = 1.5;
             plantPhase = "RISING";
             plantTimer = 0;
+            plantStartX = P0_X;
+            plantStartY = PLANT_HIDDEN_PIVOT_Y;
           }
-        } else if (plantPhase === "RISING") {
-          if (isHeroNearMediumPipe) {
-            plantRetractStartY = plantY;
+          break;
+        }
+
+        case "RISING":
+        case "AMBUSH_RISE": {
+          const riseDur = plantPhase === "AMBUSH_RISE" ? 0.2 : 0.4;
+          if (isAutonomousNearPlant) {
+            plantStartX = plantHeadX;
+            plantStartY = plantHeadY;
             plantPhase = "RETRACTING";
             plantTimer = 0;
+            break;
+          }
+
+          const p = Math.min(1, plantTimer / riseDur);
+          const easeOut = 1 - (1 - p) * (1 - p);
+          plantHeadX = P0_X;
+          plantHeadY =
+            PLANT_HIDDEN_PIVOT_Y -
+            (PLANT_HIDDEN_PIVOT_Y - PLANT_RAISED_PIVOT_Y) * easeOut;
+
+          const distHeroToHead = Math.hypot(heroCenterX - plantHeadX, heroCenterY - plantHeadY);
+          if (isDragging && rainbowState === "NONE" && distHeroToHead <= 110) {
+            plantTargetAngleDeg = computeAimAngleDeg(
+              plantHeadX,
+              PLANT_RAISED_PIVOT_Y,
+              heroCenterX,
+              heroCenterY
+            );
+            const alpha = Math.min(1, dt / 0.12);
+            plantAngleDeg += (plantTargetAngleDeg - plantAngleDeg) * alpha;
+            plantMouthFrame = 2;
           } else {
-            const p = Math.min(1, plantTimer / 0.4);
-            const easeOut = 1 - (1 - p) * (1 - p);
-            plantY =
-              PLANT_CFG.hiddenTop -
-              (PLANT_CFG.hiddenTop - PLANT_CFG.raisedTop) * easeOut;
-            plantFrame = p < 0.5 ? 1 : 2;
-            if (plantTimer >= 0.4) {
+            plantAngleDeg = 0;
+            plantMouthFrame = p < 0.45 ? 1 : 2;
+          }
+
+          if (p > 0.35 && checkHeroTouchesPlantHead()) {
+            startDevourSequence();
+            break;
+          }
+
+          if (plantTimer >= riseDur) {
+            plantHeadY = PLANT_RAISED_PIVOT_Y;
+            plantTimer = 0;
+            if (isDragging && rainbowState === "NONE" && distHeroToHead <= 110) {
+              plantPhase = "AIMING";
+            } else {
               plantPhase = "CHOMPING";
-              plantTimer = 0;
-              plantY = PLANT_CFG.raisedTop;
             }
           }
-        } else if (plantPhase === "CHOMPING") {
-          if (isHeroNearMediumPipe) {
-            plantRetractStartY = plantY;
+          break;
+        }
+
+        case "CHOMPING": {
+          if (isAutonomousNearPlant) {
+            plantStartX = plantHeadX;
+            plantStartY = plantHeadY;
             plantPhase = "RETRACTING";
             plantTimer = 0;
-          } else {
-            plantY = PLANT_CFG.raisedTop;
-            // 1.2s at 6 fps: frames 3,2,3,2,3,2
-            const stepIdx = Math.floor(plantTimer * 6);
-            plantFrame = stepIdx % 2 === 0 ? 3 : 2;
-            if (plantTimer >= 1.2) {
-              plantRetractStartY = PLANT_CFG.raisedTop;
-              plantPhase = "RETRACTING";
-              plantTimer = 0;
-            }
+            break;
           }
-        } else if (plantPhase === "RETRACTING") {
+
+          plantHeadX = P0_X;
+          plantHeadY = PLANT_RAISED_PIVOT_Y;
+
+          // Check Touch -> Devour
+          if (checkHeroTouchesPlantHead()) {
+            startDevourSequence();
+            break;
+          }
+
+          // Check Aiming: held hero within 110px of head
+          const distHeroToHead = Math.hypot(heroCenterX - plantHeadX, heroCenterY - plantHeadY);
+          if (isDragging && rainbowState === "NONE" && distHeroToHead <= 110) {
+            plantPhase = "AIMING";
+            break;
+          }
+
+          // Smoothly return angle to 0
+          plantAngleDeg += (0 - plantAngleDeg) * Math.min(1, dt / 0.12);
+          // Chomp 1.2s: mouth frames 2,1,2,1,2,1 at 6 fps
+          const stepIdx = Math.floor(plantTimer * 6);
+          plantMouthFrame = stepIdx % 2 === 0 ? 2 : 1;
+
+          if (plantTimer >= 1.2) {
+            plantStartX = plantHeadX;
+            plantStartY = plantHeadY;
+            plantPhase = "RETRACTING";
+            plantTimer = 0;
+          }
+          break;
+        }
+
+        case "AIMING": {
+          if (isAutonomousNearPlant) {
+            plantStartX = plantHeadX;
+            plantStartY = plantHeadY;
+            plantPhase = "RETRACTING";
+            plantTimer = 0;
+            break;
+          }
+
+          plantHeadX = P0_X;
+          plantHeadY = PLANT_RAISED_PIVOT_Y;
+          plantMouthFrame = 2; // mouth wide open
+
+          // Smoothly turn head toward hero (120ms smoothing, 15-deg quantized steps on sheet)
+          plantTargetAngleDeg = computeAimAngleDeg(
+            plantHeadX,
+            plantHeadY,
+            heroCenterX,
+            heroCenterY
+          );
+          const alpha = Math.min(1, dt / 0.12);
+          plantAngleDeg += (plantTargetAngleDeg - plantAngleDeg) * alpha;
+
+          // Check Touch -> Devour
+          if (checkHeroTouchesPlantHead()) {
+            startDevourSequence();
+            break;
+          }
+
+          const distHeroToHead = Math.hypot(heroCenterX - plantHeadX, heroCenterY - plantHeadY);
+          if (!isUserControlled || distHeroToHead > 115) {
+            plantPhase = "CHOMPING";
+            plantTimer = 0;
+          }
+          break;
+        }
+
+        case "RETRACTING": {
+          // If user brings hero right onto head while beginning to retract, still allow touch/aim
+          if (checkHeroTouchesPlantHead() && plantHeadY < 118) {
+            startDevourSequence();
+            break;
+          }
           const p = Math.min(1, plantTimer / 0.4);
-          plantY =
-            plantRetractStartY + (PLANT_CFG.hiddenTop - plantRetractStartY) * p;
-          plantFrame = p < 0.25 ? 4 : 1;
+          plantHeadX = plantStartX + (P0_X - plantStartX) * p;
+          plantHeadY = plantStartY + (PLANT_HIDDEN_PIVOT_Y - plantStartY) * p;
+          plantAngleDeg = plantAngleDeg * (1 - p);
+          plantMouthFrame = 0;
           if (plantTimer >= 0.4) {
             plantPhase = "HIDDEN";
             plantTimer = 0;
-            plantY = PLANT_CFG.hiddenTop;
-            plantFrame = 1;
+            plantHeadX = P0_X;
+            plantHeadY = PLANT_HIDDEN_PIVOT_Y;
           }
-        } else if (plantPhase === "FAST_RETRACT") {
-          // Instant 150ms retract when tapped
-          const p = Math.min(1, plantTimer / 0.15);
-          plantY =
-            plantRetractStartY + (PLANT_CFG.hiddenTop - plantRetractStartY) * p;
-          plantFrame = 4;
-          if (plantTimer >= 0.15) {
+          break;
+        }
+
+        // ============================================================
+        // NORMAL TAP = "OUCH" (squash -> bump + dizzy stars -> droop & sink)
+        // ============================================================
+        case "OUCH_SQUASH": {
+          plantSquashY = 3;
+          plantMouthFrame = 1;
+          if (plantTimer >= 0.08) {
+            plantPhase = "OUCH_DIZZY";
+            plantTimer = 0;
+            plantSquashY = 0;
+          }
+          break;
+        }
+
+        case "OUCH_DIZZY": {
+          // 0.8s: 3 fx-star dizzy stars orbit above head while head wobbles +-8 deg twice
+          // and mouth goes frame 1 then 0
+          const p = Math.min(1, plantTimer / 0.8);
+          const wobble = Math.sin(p * Math.PI * 4) * 16; // crosses +-15 deg quantization cleanly twice
+          plantAngleDeg = plantBaseAngleDeg + wobble;
+          plantMouthFrame = p < 0.5 ? 1 : 0;
+          if (plantTimer >= 0.8) {
+            plantPhase = "OUCH_DROOP";
+            plantTimer = 0;
+            plantStartX = plantHeadX;
+            plantStartY = plantHeadY;
+            // Tiny smoke puff at the mouth
+            spawnSmokePuff(P0_X, P0_Y - 4, 0, -16, 0.45);
+          }
+          break;
+        }
+
+        case "OUCH_DROOP": {
+          // 0.5s: head droops (tilts about 30 deg and sags) and slowly sinks into the pipe
+          const p = Math.min(1, plantTimer / 0.5);
+          const droopSign = plantBaseAngleDeg < 0 ? -1 : 1;
+          const targetDroopAngle = droopSign * 30;
+          plantAngleDeg =
+            plantBaseAngleDeg + (targetDroopAngle - plantBaseAngleDeg) * Math.min(1, p * 1.8);
+          plantExtraDroop = Math.sin(p * Math.PI) * 10;
+          plantHeadX = plantStartX + (P0_X - plantStartX) * p + droopSign * Math.sin(p * Math.PI) * 6;
+          plantHeadY = plantStartY + (PLANT_HIDDEN_PIVOT_Y - plantStartY) * (p * p);
+          plantMouthFrame = 0;
+          if (plantTimer >= 0.5) {
             plantPhase = "HIDDEN";
             plantTimer = 0;
-            plantY = PLANT_CFG.hiddenTop;
-            plantFrame = 1;
+            plantExtraDroop = 0;
+            plantHeadX = P0_X;
+            plantHeadY = PLANT_HIDDEN_PIVOT_Y;
           }
+          break;
+        }
+
+        // ============================================================
+        // DEVOUR SEQUENCE (1. LUNGE -> 2. BITE -> 3. PULL-BACK -> 4. CHEW -> 5. METEOR -> 6. EXPLOSION -> 7. RESPAWN -> 8. 8s WAIT)
+        // ============================================================
+        case "DEVOUR_LUNGE": {
+          // 1. LUNGE 0.2s ease-out: neck stretches so head reaches hero's CURRENT position (max reach 110px from P0)
+          if (!heroHiddenByPlant) {
+            const hx = heroX;
+            const hy = heroY - 21;
+            const dx = hx - P0_X;
+            const dy = hy - P0_Y;
+            const distFromP0 = Math.hypot(dx, dy);
+            const scale = distFromP0 > PLANT_MAX_REACH ? PLANT_MAX_REACH / distFromP0 : 1;
+            plantLungeTargetX = P0_X + dx * scale;
+            plantLungeTargetY = Math.min(GROUND_Y - 12, P0_Y + dy * scale);
+          }
+          const p = Math.min(1, plantTimer / 0.2);
+          const easeOut = 1 - (1 - p) * (1 - p);
+          plantHeadX = plantStartX + (plantLungeTargetX - plantStartX) * easeOut;
+          plantHeadY = plantStartY + (plantLungeTargetY - plantStartY) * easeOut;
+          plantAngleDeg = computeAimAngleDeg(
+            P0_X,
+            PLANT_RAISED_PIVOT_Y,
+            plantLungeTargetX,
+            plantLungeTargetY
+          );
+          plantMouthFrame = 2; // wide open
+
+          if (plantTimer >= 0.2) {
+            // 2. BITE 0.12s: snap frame 3; hero disappears with a small spark at the bite point
+            plantPhase = "DEVOUR_BITE";
+            plantTimer = 0;
+            plantMouthFrame = 3; // snap
+            heroHiddenByPlant = true;
+            isDragging = false;
+            activePointerId = null;
+            heroVx = 0;
+            heroVy = 0;
+            routePhase = "EATEN_HIDDEN";
+            activeBubble = "none";
+            sparkles.push({ x: plantHeadX, y: plantHeadY, age: 0, duration: 0.32 });
+            playCrunchSfx();
+          }
+          break;
+        }
+
+        case "DEVOUR_BITE": {
+          plantMouthFrame = 3;
+          if (plantTimer >= 0.12) {
+            // 3. PULL-BACK 0.35s ease-in-out
+            plantPhase = "DEVOUR_PULLBACK";
+            plantTimer = 0;
+            plantStartX = plantHeadX;
+            plantStartY = plantHeadY;
+            plantBaseAngleDeg = plantAngleDeg;
+          }
+          break;
+        }
+
+        case "DEVOUR_PULLBACK": {
+          const p = Math.min(1, plantTimer / 0.35);
+          const easeInOut = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+          plantHeadX = plantStartX + (P0_X - plantStartX) * easeInOut;
+          plantHeadY = plantStartY + (PLANT_RAISED_PIVOT_Y - plantStartY) * easeInOut;
+          plantAngleDeg = plantBaseAngleDeg * (1 - easeInOut);
+          plantMouthFrame = 3;
+          if (plantTimer >= 0.35) {
+            // 4. CHEW 2.5s
+            plantPhase = "DEVOUR_CHEW";
+            plantTimer = 0;
+            chewCrumbAccum = 0.2; // spawn first crumbs quickly
+            plantHeadX = P0_X;
+            plantHeadY = PLANT_RAISED_PIVOT_Y;
+          }
+          break;
+        }
+
+        case "DEVOUR_CHEW": {
+          // 4. CHEW 2.5s: head bobs +-2px and tilts +-15 deg, mouth alternates frames 1 and 3 at 8 fps,
+          // small crumb particles every 250ms, and 2 tiny fx-star munch stars pop
+          plantHeadX = P0_X;
+          plantHeadY = PLANT_RAISED_PIVOT_Y + Math.sin(plantTimer * Math.PI * 8) * 2;
+          const chewStep = Math.floor(plantTimer * 8);
+          plantMouthFrame = chewStep % 2 === 0 ? 1 : 3;
+          const tiltCycle = Math.floor(plantTimer * 6) % 4;
+          plantAngleDeg = tiltCycle === 0 ? -15 : tiltCycle === 2 ? 15 : 0;
+
+          chewCrumbAccum += dt;
+          if (chewCrumbAccum >= 0.25) {
+            chewCrumbAccum -= 0.25;
+            spawnChewCrumbsAndStars(plantHeadX, plantHeadY);
+            playCrunchSfx();
+          }
+
+          if (plantTimer >= 2.5) {
+            // 5. METEOR 0.7s
+            plantPhase = "DEVOUR_METEOR";
+            plantTimer = 0;
+            meteorProgress = 0;
+            plantHeadX = P0_X;
+            plantHeadY = PLANT_RAISED_PIVOT_Y;
+            plantAngleDeg = 0;
+            plantMouthFrame = 0;
+          }
+          break;
+        }
+
+        case "DEVOUR_METEOR": {
+          // 5. METEOR 0.7s: streaks from top-right off-screen onto the plant head
+          meteorProgress = Math.min(1, plantTimer / 0.7);
+          plantHeadX = P0_X;
+          plantHeadY = PLANT_RAISED_PIVOT_Y;
+          plantAngleDeg = 15; // looking slightly toward incoming meteor
+          plantMouthFrame = 1;
+
+          if (plantTimer >= 0.7) {
+            // 6. EXPLOSION: white flash (200ms), explosion-1..5 at scale 2 centered on head,
+            // 3px screen nudge, fx-smoke-sheet puffs rising; neck and head vanish at the flash
+            plantPhase = "DEVOUR_EXPLODE";
+            plantTimer = 0;
+            flashAlpha = 0.9;
+            flashDuration = 0.2;
+            flashTimer = 0;
+            spawnBoom(P0_X, PLANT_RAISED_PIVOT_Y, true, 2, 5);
+            frameNudgeTimer = 0.16;
+            frameNudgeAmplitude = 3;
+            spawnSmokePuff(P0_X - 8, PLANT_RAISED_PIVOT_Y + 6, -10, -24, 0.65);
+            spawnSmokePuff(P0_X + 8, PLANT_RAISED_PIVOT_Y + 4, 10, -26, 0.65);
+            spawnSmokePuff(P0_X, P0_Y - 4, 0, -30, 0.75);
+            plantHeadX = P0_X;
+            plantHeadY = PLANT_HIDDEN_PIVOT_Y;
+          }
+          break;
+        }
+
+        case "DEVOUR_EXPLODE": {
+          // Neck and head stay vanished; 0.8s after explosion, hero respawns at far left blinking 1s
+          plantHeadX = P0_X;
+          plantHeadY = PLANT_HIDDEN_PIVOT_Y;
+          if (plantTimer >= 0.8) {
+            // 7. RESPAWN: hero reappears at far left on ground (x = viewLeft + 28) with BLINK for 1s
+            heroHiddenByPlant = false;
+            heroX = farLeftWalkX;
+            heroY = GROUND_Y;
+            heroVx = 0;
+            heroVy = 0;
+            facing = 1;
+            heroFrame = 0;
+            activeBubble = "none";
+            rainbowState = "BLINK";
+            rainbowTimer = 0;
+            blinkDuration = 1.0;
+            routePhase = "STEP1_LEFT_IDLE";
+            phaseTimer = 0;
+
+            // 8. Plant stays gone for 8s, then rises normally
+            plantPhase = "HIDDEN";
+            plantTimer = 0;
+            nextPlantHiddenWait = 8.0;
+          }
+          break;
+        }
+
+        // ============================================================
+        // TAP DURING CHEW = "DEATH + SPIT" (shrink & sink over 0.6s, then 8s wait)
+        // ============================================================
+        case "SPIT_DEAD": {
+          const p = Math.min(1, plantTimer / 0.6);
+          plantHeadScale = Math.max(0.3, 1 - 0.65 * p);
+          plantHeadX = plantStartX + (P0_X - plantStartX) * p;
+          plantHeadY = plantStartY + (PLANT_HIDDEN_PIVOT_Y - plantStartY) * (p * p);
+          plantMouthFrame = 2;
+          if (plantTimer >= 0.6) {
+            plantPhase = "HIDDEN";
+            plantTimer = 0;
+            plantHeadScale = 1;
+            plantHeadX = P0_X;
+            plantHeadY = PLANT_HIDDEN_PIVOT_Y;
+            nextPlantHiddenWait = 8.0;
+          }
+          break;
         }
       }
 
-      // 3. Update Question Block Bump (up 5px in 120ms ease-out and back in 120ms)
+      // 3. Update Question Block Bump
       if (bumpTimer >= 0) {
         bumpTimer += dt;
         if (bumpTimer >= 0.24) {
@@ -746,7 +1384,7 @@ export default function MarioConsoleSection() {
       if (coinState !== "NONE") {
         coinTimer += dt;
         coinSpinTime += dt;
-        const hoverTargetY = BLOCKS_Y - 30; // 58 (30px above block top 88)
+        const hoverTargetY = BLOCKS_Y - 30;
 
         if (coinState === "RISING") {
           const p = Math.min(1, coinTimer / 0.45);
@@ -773,13 +1411,46 @@ export default function MarioConsoleSection() {
         }
       }
 
-      // 5. Update Hero Movement (Drag, Fall, Wait, or Autonomous Route)
-      if (isDragging) {
+      // 5. Update Hero Movement
+      if (heroHiddenByPlant || routePhase === "EATEN_HIDDEN") {
+        // Hero is inside the plant or waiting 0.8s after explosion to respawn
+        activeBubble = "none";
+      } else if (routePhase === "SPAT_OUT_ARC") {
+        // Parabolic spit-out arc landing ~60px left of plant, startled frame 14 WITHOUT bubble
+        phaseTimer += dt;
+        const spitDur = 0.52;
+        const t = Math.min(1, phaseTimer / spitDur);
+        heroX = hopX0 + (hopX1 - hopX0) * t;
+        if (t < 0.45) {
+          const u = t / 0.45;
+          const easeOut = 1 - (1 - u) * (1 - u);
+          heroY = hopY0 + (hopApexY - hopY0) * easeOut;
+        } else {
+          const v = (t - 0.45) / 0.55;
+          heroY = hopApexY + (hopY1 - hopApexY) * (v * v);
+        }
+        facing = -1;
+        heroFrame = 14; // startled frame 14 WITHOUT bubble
+        activeBubble = "none";
+
+        if (phaseTimer >= spitDur) {
+          heroX = hopX1;
+          heroY = GROUND_Y;
+          heroFrame = 0;
+          // Hero lands, does the 1s BLINK (cannot be eaten or grabbed), then resumes
+          rainbowState = "BLINK";
+          rainbowTimer = 0;
+          blinkDuration = 1.0;
+          routePhase = "STEP2_WALK_RIGHT";
+          phaseTimer = 0;
+          walkAnimTime = 0;
+          facing = 1;
+        }
+      } else if (isDragging) {
         routePhase = "DRAGGING";
         activeBubble = "none";
         heroFrame = 14; // startled frame 14 WITHOUT bubble while held
 
-        // Critically damped spring toward pointerTarget (omega = 32, max speed 600 px/s)
         const omega = 32;
         const dxTarget = pointerTargetX - heroX;
         const dyTarget = pointerTargetY - heroY;
@@ -821,7 +1492,6 @@ export default function MarioConsoleSection() {
           heroVy = 0;
           heroFrame = 0;
           if (rainbowState === "RAINBOW") {
-            // In rainbow mode keep autonomous route running immediately
             resumeFromCurrentSurface();
           } else {
             routePhase = "WAIT_RESUME";
@@ -830,7 +1500,6 @@ export default function MarioConsoleSection() {
         }
       } else if (routePhase === "WAIT_RESUME") {
         activeBubble = "none";
-        // Ensure still supported by surface
         const surf = detectCurrentSurface();
         if (!surf) {
           routePhase = "AIR_FALL";
@@ -842,7 +1511,6 @@ export default function MarioConsoleSection() {
           }
         }
       } else if (prefersReducedMotion) {
-        // Reduced motion static ambient pose on ground
         heroY = GROUND_Y;
         heroFrame = 0;
         activeBubble = "none";
@@ -928,11 +1596,12 @@ export default function MarioConsoleSection() {
               heroX = PIPE1_CENTER_X;
               heroY = PIPE1_SURF_Y;
               phaseTimer = 0;
-              // Step 3: On pipe 1, if plant is up or rising, show startled 0.9s then look
-              if (plantPhase !== "HIDDEN" || plantTimer >= 0.95) {
-                if (plantPhase === "HIDDEN") {
+              if (plantPhase !== "HIDDEN" || (nextPlantHiddenWait <= 1.5 && plantTimer >= 0.95)) {
+                if (plantPhase === "HIDDEN" && nextPlantHiddenWait <= 1.5) {
                   plantPhase = "RISING";
                   plantTimer = 0;
+                  plantStartX = P0_X;
+                  plantStartY = PLANT_HIDDEN_PIVOT_Y;
                 }
                 routePhase = "STEP3_P1_STARTLED";
                 heroFrame = 14;
@@ -1026,7 +1695,6 @@ export default function MarioConsoleSection() {
             facing = 1;
             heroFrame = 10;
             activeBubble = "none";
-            // Hop to pipe 2, then immediately to pipe 3
             if (phaseTimer >= 0.14) {
               startHop(
                 PIPE2_CENTER_X,
@@ -1062,7 +1730,6 @@ export default function MarioConsoleSection() {
           }
 
           case "STEP5_P3_CONFUSED": {
-            // Step 5: On pipe 3: CONFUSED (frame 11 + question bubble) facing RIGHT for 2.5s
             heroX = PIPE3_CENTER_X;
             heroY = PIPE3_SURF_Y;
             facing = 1;
@@ -1091,13 +1758,12 @@ export default function MarioConsoleSection() {
           }
 
           case "STEP6_P3_WAIT_PLANT": {
-            // Step 6: hop to pipe 2 only when plant is hidden (otherwise wait on pipe 3 in look pose)
             heroX = PIPE3_CENTER_X;
             heroY = PIPE3_SURF_Y;
             facing = -1;
             activeBubble = "none";
             if (plantPhase !== "HIDDEN") {
-              heroFrame = 12; // look pose
+              heroFrame = 12;
               phaseTimer = 0;
             } else {
               plantRouteLock = true;
@@ -1234,7 +1900,7 @@ export default function MarioConsoleSection() {
               heroX = farLeftWalkX;
               routePhase = "STEP7_LEFT_CONFUSED";
               phaseTimer = 0;
-              facing = -1; // MUST face LEFT while confused at far-left dead end!
+              facing = -1;
               heroFrame = 11;
               activeBubble = "question";
             }
@@ -1244,7 +1910,7 @@ export default function MarioConsoleSection() {
           case "STEP7_LEFT_CONFUSED": {
             heroX = farLeftWalkX;
             heroY = GROUND_Y;
-            facing = -1; // faces LEFT
+            facing = -1;
             heroFrame = 11;
             activeBubble = "question";
             if (phaseTimer >= 2.5) {
@@ -1295,9 +1961,9 @@ export default function MarioConsoleSection() {
         }
       }
 
-      // 6. Check Coin Collection Overlap (24x30 forgiving box around coin center once emerged above block)
-      if (coinState !== "NONE" && coinY <= BLOCKS_Y - 16) {
-        const coinCx = QBLOCK_CENTER_X; // 256
+      // 6. Check Coin Collection Overlap
+      if (!heroHiddenByPlant && coinState !== "NONE" && coinY <= BLOCKS_Y - 16) {
+        const coinCx = QBLOCK_CENTER_X;
         const coinCy = coinY + 9;
         const heroLeft = heroX - HITBOX_HALF_W;
         const heroRight = heroX + HITBOX_HALF_W;
@@ -1338,10 +2004,11 @@ export default function MarioConsoleSection() {
         if (rainbowTimer >= 15.0) {
           rainbowState = "BLINK";
           rainbowTimer = 0;
+          blinkDuration = 1.0;
         }
       } else if (rainbowState === "BLINK") {
         rainbowTimer += dt;
-        if (rainbowTimer >= 1.0) {
+        if (rainbowTimer >= blinkDuration) {
           rainbowState = "NONE";
           rainbowTimer = 0;
         }
@@ -1354,7 +2021,7 @@ export default function MarioConsoleSection() {
         }
       }
 
-      // 8. Update Booms, Sparkles, +1, and Frame Nudge
+      // 8. Update Booms, Sparkles, +1, Smoke Puffs, Crumbs, Munch Stars, Flashes & Shakes
       for (let i = booms.length - 1; i >= 0; i--) {
         booms[i].age += dt;
         if (booms[i].age >= booms[i].duration) {
@@ -1373,8 +2040,50 @@ export default function MarioConsoleSection() {
           plusOnes.splice(i, 1);
         }
       }
+      for (let i = smokePuffs.length - 1; i >= 0; i--) {
+        const sp = smokePuffs[i];
+        sp.age += dt;
+        sp.x += sp.vx * dt;
+        sp.y += sp.vy * dt;
+        if (sp.age >= sp.duration) {
+          smokePuffs.splice(i, 1);
+        }
+      }
+      for (let i = crumbs.length - 1; i >= 0; i--) {
+        const cr = crumbs[i];
+        cr.age += dt;
+        cr.vy += 260 * dt;
+        cr.x += cr.vx * dt;
+        cr.y += cr.vy * dt;
+        if (cr.age >= cr.duration) {
+          crumbs.splice(i, 1);
+        }
+      }
+      for (let i = munchStars.length - 1; i >= 0; i--) {
+        const ms = munchStars[i];
+        ms.age += dt;
+        ms.x += ms.vx * dt;
+        ms.y += ms.vy * dt;
+        if (ms.age >= ms.duration) {
+          munchStars.splice(i, 1);
+        }
+      }
+
+      if (flashAlpha > 0) {
+        flashTimer += dt;
+        flashAlpha = Math.max(0, 0.9 * (1 - flashTimer / flashDuration));
+      }
+      if (doubleFlashActive) {
+        doubleFlashTimer += dt;
+        if (doubleFlashTimer >= 0.24) {
+          doubleFlashActive = false;
+        }
+      }
       if (frameNudgeTimer > 0) {
         frameNudgeTimer = Math.max(0, frameNudgeTimer - dt);
+      }
+      if (shakeTimer > 0) {
+        shakeTimer = Math.max(0, shakeTimer - dt);
       }
     };
 
@@ -1475,20 +2184,146 @@ export default function MarioConsoleSection() {
         }
       }
 
-      // 6. Chomper Plant (behind pipes, clipped at y=134)
-      if (plantPhase !== "HIDDEN" && plantY < PLANT_CFG.clipY) {
-        const pImg = images[`plant${plantFrame}`];
-        if (pImg?.complete && pImg.naturalWidth > 0) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(PLANT_CFG.x - 4, 0, 40, PLANT_CFG.clipY);
-          ctx.clip();
-          ctx.drawImage(pImg, PLANT_CFG.x, Math.round(plantY), 32, 64);
-          ctx.restore();
+      // 6. CHOMPER PLANT RIG (leaves, stem-bead neck on quadratic curve, head from plant-head-sheet.png)
+      const isPlantVisible =
+        plantPhase !== "HIDDEN" &&
+        plantPhase !== "DEVOUR_EXPLODE" &&
+        plantHeadY < PLANT_HIDDEN_PIVOT_Y - 1;
+
+      const { row: headRow, quantizedDeg } = quantizePlantAngle(plantAngleDeg);
+
+      if (isPlantVisible) {
+        ctx.save();
+        ctx.beginPath();
+        // Clip at y=134 (pipe lip) inside the pipe column so the plant emerges from inside the pipe;
+        // outside the pipe column allow down to groundY=168 so bottom-left lunges are never clipped in mid-air
+        ctx.rect(0, 0, WORLD_W, PLANT_CFG.clipY);
+        ctx.rect(0, PLANT_CFG.clipY, PIPE2.x - 8, GROUND_Y - PLANT_CFG.clipY);
+        ctx.rect(
+          PIPE2.x + PIPE_W + 8,
+          PLANT_CFG.clipY,
+          WORLD_W - (PIPE2.x + PIPE_W + 8),
+          GROUND_Y - PLANT_CFG.clipY
+        );
+        ctx.clip();
+
+        if (plantGrayWhiteTimer > 0) {
+          ctx.filter = "grayscale(100%) brightness(1.8)";
+        }
+
+        const emergeFactor = Math.max(
+          0,
+          Math.min(
+            1,
+            (PLANT_HIDDEN_PIVOT_Y - plantHeadY) /
+              (PLANT_HIDDEN_PIVOT_Y - PLANT_RAISED_PIVOT_Y)
+          )
+        );
+
+        // 6a. Draw plant-leaves.png (32x18) behind the pipe at x=407, y=108 when emerged
+        if (images.plantLeaves?.complete && images.plantLeaves.naturalWidth > 0) {
+          const leavesY = Math.round(108 + (1 - emergeFactor) * 28);
+          ctx.drawImage(images.plantLeaves, PLANT_CFG.x, leavesY, 32, 18);
+        }
+
+        // 6b. Draw NECK: chain of stem-bead.png (10x10) every 4px along a quadratic curve from P0 to head pivot
+        const p2x = plantHeadX;
+        const p2y = plantHeadY + plantSquashY;
+        const dx = p2x - P0_X;
+        const dy = p2y - P0_Y;
+        const dist = Math.hypot(dx, dy);
+
+        // Slight droop on the curve (never straight when stretched)
+        const sidewaysDroop = Math.min(24, Math.abs(dx) * 0.25 + dist * 0.08) + plantExtraDroop;
+        const slightBendX = Math.abs(dx) < 3 ? Math.sin(quantizedDeg * (Math.PI / 180)) * 3 : -dx * 0.06;
+        const p1x = (P0_X + p2x) * 0.5 + slightBendX;
+        const p1y = (P0_Y + p2y) * 0.5 + sidewaysDroop;
+
+        if (images.stemBead?.complete && images.stemBead.naturalWidth > 0 && dist > 3) {
+          // Sample quadratic Bezier curve every 4px
+          const approxLen =
+            Math.hypot(p1x - P0_X, p1y - P0_Y) + Math.hypot(p2x - p1x, p2y - p1y);
+          const numBeads = Math.max(2, Math.ceil(approxLen / 4));
+          for (let b = 0; b <= numBeads; b++) {
+            const t = b / numBeads;
+            const inv = 1 - t;
+            const bx = inv * inv * P0_X + 2 * inv * t * p1x + t * t * p2x;
+            const by = inv * inv * P0_Y + 2 * inv * t * p1y + t * t * p2y;
+            ctx.drawImage(images.stemBead, Math.round(bx - 5), Math.round(by - 5), 10, 10);
+          }
+        }
+
+        // 6c. Draw HEAD from plant-head-sheet.png (cell 88x88, col = mouthFrame, row = angleRow, pivot at (44,44))
+        if (images.plantHeadSheet?.complete && images.plantHeadSheet.naturalWidth > 0) {
+          const sx = Math.max(0, Math.min(3, plantMouthFrame)) * HEAD_CELL;
+          const sy = Math.max(0, Math.min(18, headRow)) * HEAD_CELL;
+          const drawW = Math.round(HEAD_CELL * plantHeadScale);
+          const drawH = Math.round(HEAD_CELL * plantHeadScale);
+          const drawX = Math.round(p2x - HEAD_PIVOT_X * plantHeadScale);
+          const drawY = Math.round(p2y - HEAD_PIVOT_Y * plantHeadScale);
+
+          ctx.drawImage(
+            images.plantHeadSheet,
+            sx,
+            sy,
+            HEAD_CELL,
+            HEAD_CELL,
+            drawX,
+            drawY,
+            drawW,
+            drawH
+          );
+        }
+
+        ctx.restore();
+      }
+
+      // 6d. Plant OUCH Effects (fx-bump + 3 orbiting fx-star dizzy stars) & Chew Effects (crumbs + munch stars)
+      if (
+        (plantPhase === "OUCH_SQUASH" || plantPhase === "OUCH_DIZZY") &&
+        images.fxBump?.complete &&
+        images.fxBump.naturalWidth > 0
+      ) {
+        // fx-bump.png (14x11) pops on top of head with overshoot (1x, 1.3x, 1x)
+        const totalOuchTime =
+          plantPhase === "OUCH_SQUASH" ? plantTimer : 0.08 + plantTimer;
+        let bumpScale = 1.0;
+        if (totalOuchTime < 0.08) {
+          bumpScale = 1.0 + (totalOuchTime / 0.08) * 0.3;
+        } else if (totalOuchTime < 0.18) {
+          bumpScale = 1.3 - ((totalOuchTime - 0.08) / 0.1) * 0.3;
+        }
+        const bw = Math.round(14 * bumpScale);
+        const bh = Math.round(11 * bumpScale);
+        const rad = (quantizedDeg * Math.PI) / 180;
+        const bumpCx = plantHeadX + Math.sin(rad) * 20;
+        const bumpCy = plantHeadY + plantSquashY - Math.cos(rad) * 24 - 8;
+        ctx.drawImage(
+          images.fxBump,
+          Math.round(bumpCx - bw / 2),
+          Math.round(bumpCy - bh / 2),
+          bw,
+          bh
+        );
+      }
+
+      if (
+        plantPhase === "OUCH_DIZZY" &&
+        images.fxStar?.complete &&
+        images.fxStar.naturalWidth > 0
+      ) {
+        // 3 fx-star.png (11x11) dizzy stars orbit above the head for 0.8s
+        const orbitCenterX = plantHeadX;
+        const orbitCenterY = plantHeadY - 32;
+        for (let s = 0; s < 3; s++) {
+          const theta = plantTimer * Math.PI * 5 + (s * Math.PI * 2) / 3;
+          const sx = orbitCenterX + Math.cos(theta) * 18;
+          const sy = orbitCenterY + Math.sin(theta) * 5;
+          ctx.drawImage(images.fxStar, Math.round(sx - 5), Math.round(sy - 5), 11, 11);
         }
       }
 
-      // 7. Three Pipes
+      // 7. Three Pipes (drawn on top of the plant so the plant emerges from inside the medium pipe)
       if (images.pipeShort?.complete && images.pipeShort.naturalWidth > 0) {
         ctx.drawImage(images.pipeShort, PIPE1.x, PIPE1.top, 34, 32);
       }
@@ -1500,7 +2335,12 @@ export default function MarioConsoleSection() {
       }
 
       // 8. Hero Rainbow Light Trail Ghosts
-      if (trailGhosts.length > 0 && images.heroRainbow?.complete && images.heroRainbow.naturalWidth > 0) {
+      if (
+        !heroHiddenByPlant &&
+        trailGhosts.length > 0 &&
+        images.heroRainbow?.complete &&
+        images.heroRainbow.naturalWidth > 0
+      ) {
         ctx.save();
         ctx.globalCompositeOperation = "lighter";
         for (let i = 0; i < trailGhosts.length; i++) {
@@ -1527,10 +2367,10 @@ export default function MarioConsoleSection() {
         ctx.restore();
       }
 
-      // 9. Hero Sprite (devj-sheet-nobubble.png or devj-rainbow-sheet.png)
+      // 9. Hero Sprite (hidden while inside plant during BITE/PULLBACK/CHEW/METEOR/EXPLODE)
       const useRainbowSheet = rainbowState === "RAINBOW";
       const sheetImg = useRainbowSheet ? images.heroRainbow : images.heroSheet;
-      if (sheetImg?.complete && sheetImg.naturalWidth > 0) {
+      if (!heroHiddenByPlant && sheetImg?.complete && sheetImg.naturalWidth > 0) {
         ctx.save();
         if (rainbowState === "BLINK") {
           // 10 Hz toggle between 0.25 and 1.0
@@ -1542,7 +2382,9 @@ export default function MarioConsoleSection() {
         ctx.translate(drawX, drawY);
         ctx.scale(facing, 1);
 
-        const rowY = useRainbowSheet ? (Math.floor(rainbowTimer * 8) % 3) * HERO_FRAME_H : 0;
+        const rowY = useRainbowSheet
+          ? (Math.floor(rainbowTimer * 8) % 3) * HERO_FRAME_H
+          : 0;
         ctx.drawImage(
           sheetImg,
           heroFrame * HERO_FRAME_W,
@@ -1558,18 +2400,71 @@ export default function MarioConsoleSection() {
       }
 
       // 10. Separate Speech Bubble (NEVER mirrored!)
-      if (activeBubble !== "none" && !isDragging) {
+      if (!heroHiddenByPlant && activeBubble !== "none" && !isDragging) {
         const bImg = activeBubble === "question" ? images.bubbleQ : images.bubbleEx;
         if (bImg?.complete && bImg.naturalWidth > 0) {
           const bob = Math.round(Math.sin(simTime * 6) * 2);
-          // 10px toward the facing side and 8px above the head
           const bx = Math.round(heroX + facing * 10 - 6);
           const by = Math.round(heroY - 42 - 8 - 15 + bob);
           ctx.drawImage(bImg, bx, Math.max(2, by), 12, 15);
         }
       }
 
-      // 11. Effects: Sparkles, +1, and Tap Booms
+      // 11. Chew Crumbs (2x2 pixel squares in red/blue/white) & Munch Stars (fx-star.png)
+      for (let i = 0; i < crumbs.length; i++) {
+        const cr = crumbs[i];
+        ctx.fillStyle = cr.color;
+        ctx.fillRect(Math.round(cr.x), Math.round(cr.y), 2, 2);
+      }
+      if (images.fxStar?.complete && images.fxStar.naturalWidth > 0) {
+        for (let i = 0; i < munchStars.length; i++) {
+          const ms = munchStars[i];
+          ctx.drawImage(images.fxStar, Math.round(ms.x - 5), Math.round(ms.y - 5), 11, 11);
+        }
+      }
+
+      // 12. Meteor during DEVOUR_METEOR (meteor-1..3, scale 1, streaks from top-right off-screen onto plant head)
+      if (plantPhase === "DEVOUR_METEOR") {
+        const mIdx = (Math.floor(simTime * 12) % 3) + 1;
+        const mImg = images[`meteor${mIdx}`];
+        if (mImg?.complete && mImg.naturalWidth > 0) {
+          // meteor-1..3 is 190x120; head center is at (32, 92) inside the sprite
+          const startHeadX = WORLD_W + 70;
+          const startHeadY = -30;
+          const endHeadX = P0_X;
+          const endHeadY = PLANT_RAISED_PIVOT_Y;
+          const curHeadX = startHeadX + (endHeadX - startHeadX) * meteorProgress;
+          const curHeadY = startHeadY + (endHeadY - startHeadY) * meteorProgress;
+          ctx.drawImage(
+            mImg,
+            Math.round(curHeadX - 32),
+            Math.round(curHeadY - 92),
+            190,
+            120
+          );
+        }
+      }
+
+      // 13. Smoke Puffs (fx-smoke-sheet.png: 4 frames of 22x22)
+      if (images.fxSmoke?.complete && images.fxSmoke.naturalWidth > 0) {
+        for (let i = 0; i < smokePuffs.length; i++) {
+          const sp = smokePuffs[i];
+          const fIdx = Math.min(3, Math.floor((sp.age / sp.duration) * 4));
+          ctx.drawImage(
+            images.fxSmoke,
+            fIdx * 22,
+            0,
+            22,
+            22,
+            Math.round(sp.x - 11),
+            Math.round(sp.y - 11),
+            22,
+            22
+          );
+        }
+      }
+
+      // 14. Sparkles, +1, and Booms (scale 1 = 36x36 world px, scale 2 = 72x72 world px)
       for (let i = 0; i < sparkles.length; i++) {
         const sp = sparkles[i];
         const fIdx = Math.min(4, Math.floor((sp.age / sp.duration) * 4) + 1);
@@ -1598,18 +2493,41 @@ export default function MarioConsoleSection() {
 
       for (let i = 0; i < booms.length; i++) {
         const bm = booms[i];
-        const fIdx = Math.min(5, Math.floor((bm.age / bm.duration) * 5) + 1);
+        const fIdx = Math.min(
+          bm.maxFrames,
+          Math.floor((bm.age / bm.duration) * bm.maxFrames) + 1
+        );
         const eImg = images[`exp${fIdx}`];
         if (eImg?.complete && eImg.naturalWidth > 0) {
-          // 36x36 in world space = 72x72 CSS px at K=2, centered on tap
-          ctx.drawImage(eImg, Math.round(bm.x - 18), Math.round(bm.y - 18), 36, 36);
+          const size = Math.round(36 * bm.scale);
+          const half = Math.round(size / 2);
+          ctx.drawImage(eImg, Math.round(bm.x - half), Math.round(bm.y - half), size, size);
         }
       }
 
       ctx.restore();
 
+      // 15. White Flash Overlay (200ms on meteor explosion, or two 100ms flashes on DEATH + SPIT)
+      let currentFlash = flashAlpha;
+      if (doubleFlashActive) {
+        if (doubleFlashTimer < 0.1 || (doubleFlashTimer >= 0.14 && doubleFlashTimer < 0.24)) {
+          currentFlash = Math.max(currentFlash, 0.78);
+        }
+      }
+      if (currentFlash > 0.01) {
+        ctx.save();
+        ctx.fillStyle = `rgba(255, 255, 255, ${currentFlash.toFixed(3)})`;
+        ctx.fillRect(0, 0, wn, WORLD_H);
+        ctx.restore();
+      }
+
       // Update transparent grab handle position & cursor
-      const isGrabbable = rainbowState !== "RAINBOW";
+      // During 15s rainbow mode, 1s blink, eaten, or spit arc, hero CANNOT be grabbed
+      const isGrabbable =
+        !heroHiddenByPlant &&
+        rainbowState === "NONE" &&
+        routePhase !== "SPAT_OUT_ARC" &&
+        routePhase !== "EATEN_HIDDEN";
       const handleW = Math.max(44, 36 * scaleK);
       const handleH = Math.max(44, 50 * scaleK);
       const heroScreenCenterX = (heroX - viewLeft) * scaleK;
@@ -1627,9 +2545,13 @@ export default function MarioConsoleSection() {
         ? "grabbing"
         : "grab";
 
-      // Frame 2px nudge on boom
-      if (frameNudgeTimer > 0) {
-        const nudgePx = Math.sin((frameNudgeTimer / 0.1) * Math.PI) * 2;
+      // Frame nudge / shake
+      if (shakeTimer > 0) {
+        const sx = Math.sin(simTime * 90) * shakeAmplitude;
+        const sy = Math.cos(simTime * 110) * shakeAmplitude;
+        frameEl.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0)`;
+      } else if (frameNudgeTimer > 0) {
+        const nudgePx = Math.sin((frameNudgeTimer / 0.1) * Math.PI) * frameNudgeAmplitude;
         frameEl.style.transform = `translate3d(0, ${nudgePx.toFixed(1)}px, 0)`;
       } else {
         frameEl.style.transform = "translate3d(0, 0, 0)";
@@ -1641,10 +2563,18 @@ export default function MarioConsoleSection() {
       frameEl.dataset.heroY = String(Math.round(heroY));
       frameEl.dataset.heroFacing = String(facing);
       frameEl.dataset.heroFrame = String(heroFrame);
+      frameEl.dataset.heroHidden = String(heroHiddenByPlant);
       frameEl.dataset.bubble = activeBubble;
       frameEl.dataset.plantPhase = plantPhase;
-      frameEl.dataset.plantY = String(Math.round(plantY));
+      frameEl.dataset.plantY = String(Math.round(plantHeadY));
+      frameEl.dataset.plantHeadX = String(Math.round(plantHeadX));
+      frameEl.dataset.plantHeadY = String(Math.round(plantHeadY));
+      frameEl.dataset.plantAngle = String(quantizedDeg);
+      frameEl.dataset.plantMouthFrame = String(plantMouthFrame);
       frameEl.dataset.plantNextWait = String(nextPlantHiddenWait);
+      frameEl.dataset.devourCount = String(devourCount);
+      frameEl.dataset.ouchCount = String(ouchCount);
+      frameEl.dataset.spitCount = String(spitCount);
       frameEl.dataset.coinState = coinState;
       frameEl.dataset.coinY = String(Math.round(coinY));
       frameEl.dataset.rainbowState = rainbowState;
@@ -1673,7 +2603,14 @@ export default function MarioConsoleSection() {
     // Pointer Events on Hero Grab Handle
     const onHandlePointerDown = (e: PointerEvent) => {
       if (e.button !== 0 && e.pointerType === "mouse") return;
-      if (rainbowState === "RAINBOW") return; // Not grabbable in rainbow mode
+      if (
+        heroHiddenByPlant ||
+        rainbowState !== "NONE" ||
+        routePhase === "SPAT_OUT_ARC" ||
+        routePhase === "EATEN_HIDDEN"
+      ) {
+        return;
+      }
 
       e.stopPropagation();
       const { wx, wy } = clientToWorld(e.clientX, e.clientY);
@@ -1710,7 +2647,8 @@ export default function MarioConsoleSection() {
         }
       } catch {}
 
-      // Keep modest throw velocity so upward throws can also bump the ? block
+      if (heroHiddenByPlant || routePhase === "EATEN_HIDDEN") return;
+
       heroVx = Math.max(-180, Math.min(180, heroVx * 0.35));
       heroVy = Math.max(-260, Math.min(260, heroVy * 0.45));
 
@@ -1731,8 +2669,9 @@ export default function MarioConsoleSection() {
       if (e.button !== 0 && e.pointerType === "mouse") return;
       const { wx, wy } = clientToWorld(e.clientX, e.clientY);
 
-      // 1. Check if tapping the hero while in rainbow mode -> Rule 7: does nothing
+      // 1. Tapping the hero while in rainbow mode -> Rule 7: does nothing
       if (
+        !heroHiddenByPlant &&
         wx >= heroX - 18 &&
         wx <= heroX + 18 &&
         wy >= heroY - 48 &&
@@ -1743,33 +2682,50 @@ export default function MarioConsoleSection() {
         }
       }
 
-      // 2. Check if tapping the Chomper Plant (visible rect + 10px, not forced hidden)
+      // 2. Check if tapping the Chomper Plant (head rectangle + 10px, works even when only the tip shows)
       const isForcedHidden =
-        Math.abs(heroX - PIPE2_CENTER_X) <= 24 || plantRouteLock;
-      const isPlantVisible =
+        !isDragging &&
+        routePhase !== "AIR_FALL" &&
+        routePhase !== "WAIT_RESUME" &&
+        !heroHiddenByPlant &&
+        (Math.abs(heroX - PIPE2_CENTER_X) <= 24 || plantRouteLock);
+
+      const isPlantTipVisible =
         plantPhase !== "HIDDEN" &&
-        plantPhase !== "FAST_RETRACT" &&
-        plantY < PLANT_CFG.clipY &&
+        plantPhase !== "DEVOUR_EXPLODE" &&
+        plantHeadY - 38 < PLANT_CFG.clipY &&
         !isForcedHidden;
 
-      if (isPlantVisible) {
-        const pLeft = PLANT_CFG.x - 10;
-        const pRight = PLANT_CFG.x + 32 + 10;
-        const pTop = plantY - 10;
-        const pBot = PLANT_CFG.clipY + 10;
+      if (isPlantTipVisible) {
+        // Head rectangle + 10px padding (plus pipe lip tip area when partially emerged)
+        const pLeft = Math.min(PLANT_CFG.x, plantHeadX - 24) - 10;
+        const pRight = Math.max(PLANT_CFG.x + 32, plantHeadX + 24) + 10;
+        const pTop = Math.min(plantHeadY - 36, PLANT_CFG.clipY - 6) - 10;
+        const pBot = Math.max(plantHeadY + 20, PLANT_CFG.clipY) + 10;
+
         if (wx >= pLeft && wx <= pRight && wy >= pTop && wy <= pBot) {
-          plantRetractStartY = plantY;
-          plantPhase = "FAST_RETRACT";
-          plantTimer = 0;
-          nextPlantHiddenWait = 4.0; // NEXT hidden period is 4s instead of 1.5s
-          spawnBoom(PLANT_CFG.x + 16, Math.min(124, plantY + 14), true);
-          return;
+          // b) TAP DURING THE CHEW (stage 4) = "DEATH + SPIT"
+          if (plantPhase === "DEVOUR_CHEW" || plantPhase === "DEVOUR_PULLBACK") {
+            triggerPlantDeathAndSpit();
+            return;
+          }
+          // a) NORMAL TAP = "OUCH" (when rising, chomping, or aiming)
+          if (
+            plantPhase === "RISING" ||
+            plantPhase === "AMBUSH_RISE" ||
+            plantPhase === "CHOMPING" ||
+            plantPhase === "AIMING" ||
+            plantPhase === "RETRACTING"
+          ) {
+            triggerPlantOuch();
+            return;
+          }
         }
       }
 
       // 3. Tap anywhere else -> spawn small boom
       if (wx >= viewLeft && wx <= WORLD_W && wy >= 0 && wy <= WORLD_H) {
-        spawnBoom(wx, wy, false);
+        spawnBoom(wx, wy, false, 1, 5);
       }
     };
 
@@ -1822,7 +2778,6 @@ export default function MarioConsoleSection() {
       }
     };
 
-    // Pause when section is off-screen
     const io = new IntersectionObserver(
       (entries) => {
         isSectionVisible = Boolean(entries[0]?.isIntersecting);
@@ -1833,7 +2788,6 @@ export default function MarioConsoleSection() {
     );
     io.observe(frameEl);
 
-    // Pause when tab is hidden
     const onVisChange = () => {
       isTabVisible = !document.hidden;
       if (isTabVisible) startLoop();
@@ -1887,8 +2841,8 @@ export default function MarioConsoleSection() {
               aria-hidden="true"
               className="mario-console-frame mario-box-lg relative overflow-hidden bg-[#5C94FC] select-none"
               style={{
-                width: cssWidth + 8, // +8px for 4px left/right border
-                height: cssHeight + 8, // +8px for 4px top/bottom border
+                width: cssWidth + 8,
+                height: cssHeight + 8,
                 userSelect: "none",
                 WebkitUserSelect: "none",
                 WebkitTouchCallout: "none",
@@ -1906,6 +2860,50 @@ export default function MarioConsoleSection() {
                   touchAction: "auto",
                 }}
               />
+
+              {/* Tiny 24px Speaker Mute Button at top-right corner */}
+              <button
+                type="button"
+                aria-label={muted ? "Nyalakan efek suara" : "Matikan efek suara"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const next = toggleSfxMuted();
+                  setMuted(next);
+                }}
+                className="absolute top-1.5 right-1.5 z-20 w-6 h-6 flex items-center justify-center bg-[#2B1B0E]/45 hover:bg-[#2B1B0E]/70 text-white transition-colors"
+                style={{ imageRendering: "pixelated" }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M2 5H5L8 2V12L5 9H2V5Z"
+                    fill="#FFFFFF"
+                    stroke="#2B1B0E"
+                    strokeWidth="1"
+                  />
+                  {muted ? (
+                    <path
+                      d="M10 5L13 8M13 5L10 8"
+                      stroke="#E52521"
+                      strokeWidth="1.5"
+                      strokeLinecap="square"
+                    />
+                  ) : (
+                    <path
+                      d="M10 4.5C10.8 5.2 10.8 8.8 10 9.5M11.8 3C13 4.5 13 9.5 11.8 11"
+                      stroke="#FFFFFF"
+                      strokeWidth="1.2"
+                      strokeLinecap="square"
+                    />
+                  )}
+                </svg>
+              </button>
 
               {/* Dedicated Hero Drag Handle (at least 44x44 CSS px, touch-action: none) */}
               <div
