@@ -131,7 +131,7 @@ export default function CvModal({ isOpen, onClose }: CvModalProps) {
               >
                 <div className="flex flex-col items-center justify-center h-full p-6 text-center">
                   <p className="text-sm text-muted mb-4">
-                    Pratinjau PDF tidak didukung di peramban ini. Anda dapat mengunduh dokumen secara langsung:
+                    Kalau Pratinjaunya nggak di dukung ama devicenya, kalau mau liat bisa di unduh aja ya:
                   </p>
                   <a
                     href={CV_PATH}
