@@ -1,0 +1,159 @@
+<!DOCTYPE html><html lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+    @layer base {
+      html, body {
+        margin: 0;
+        padding: 0;
+        background-color: #FFFFFF;
+        font-family: 'Inter', sans-serif;
+      }
+    }
+  </style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<meta content="web_standard" name="shell-type"></head>
+<body class="bg-white text-[#14171F] antialiased min-h-screen">
+<!-- 1. NAVBAR -->
+<header class="fixed top-0 left-0 w-full z-50 bg-white border-b border-[#E5E7EB]">
+<div class="h-16 max-w-5xl mx-auto px-6 flex items-center justify-center">
+<nav class="flex items-center gap-8">
+<a class="text-sm font-semibold text-[#14171F] transition-colors" href="#">Home</a>
+<a class="text-sm font-medium text-[#6B7280] hover:text-[#14171F] transition-colors" href="#">Jenis</a>
+<a class="text-sm font-medium text-[#6B7280] hover:text-[#14171F] transition-colors" href="#">Paket</a>
+<a class="text-sm font-medium text-[#6B7280] hover:text-[#14171F] transition-colors" href="#">Kontak</a>
+</nav>
+</div>
+</header>
+<!-- MAIN CONTAINER -->
+<main class="pt-24 pb-16 px-6 max-w-5xl mx-auto"><div class="flex flex-col w-full">
+<!-- SECTION 1: Alur Kerja -->
+<section class="w-full">
+<h2 class="font-headline-md text-headline-md font-bold tracking-tight text-[#14171F] mb-10">Alur Kerja</h2>
+<div class="grid grid-cols-1 md:grid-cols-5 gap-8">
+<!-- Step 1 -->
+<div class="flex flex-col">
+<div class="w-8 h-8 rounded-full border border-primary-container text-primary-container flex items-center justify-center font-label-sm text-label-sm font-semibold mb-3">
+          01
+        </div>
+<h3 class="font-headline-sm text-headline-sm font-bold text-[#14171F] mb-1.5">Konsultasi</h3>
+<p class="font-body-sm text-body-sm text-[#6B7280] leading-relaxed">Diskusi kebutuhan proyek, referensi, dan target website.</p>
+</div>
+<!-- Step 2 -->
+<div class="flex flex-col">
+<div class="w-8 h-8 rounded-full border border-primary-container text-primary-container flex items-center justify-center font-label-sm text-label-sm font-semibold mb-3">
+          02
+        </div>
+<h3 class="font-headline-sm text-headline-sm font-bold text-[#14171F] mb-1.5">Desain</h3>
+<p class="font-body-sm text-body-sm text-[#6B7280] leading-relaxed">Penyusunan wireframe dan desain visual antarmuka.</p>
+</div>
+<!-- Step 3 -->
+<div class="flex flex-col">
+<div class="w-8 h-8 rounded-full border border-primary-container text-primary-container flex items-center justify-center font-label-sm text-label-sm font-semibold mb-3">
+          03
+        </div>
+<h3 class="font-headline-sm text-headline-sm font-bold text-[#14171F] mb-1.5">Develop</h3>
+<p class="font-body-sm text-body-sm text-[#6B7280] leading-relaxed">Proses coding frontend, backend, dan database terintegrasi.</p>
+</div>
+<!-- Step 4 -->
+<div class="flex flex-col">
+<div class="w-8 h-8 rounded-full border border-primary-container text-primary-container flex items-center justify-center font-label-sm text-label-sm font-semibold mb-3">
+          04
+        </div>
+<h3 class="font-headline-sm text-headline-sm font-bold text-[#14171F] mb-1.5">Revisi</h3>
+<p class="font-body-sm text-body-sm text-[#6B7280] leading-relaxed">Pengecekan hasil bersama dan penyesuaian detail.</p>
+</div>
+<!-- Step 5 -->
+<div class="flex flex-col">
+<div class="w-8 h-8 rounded-full border border-primary-container text-primary-container flex items-center justify-center font-label-sm text-label-sm font-semibold mb-3">
+          05
+        </div>
+<h3 class="font-headline-sm text-headline-sm font-bold text-[#14171F] mb-1.5">Launch</h3>
+<p class="font-body-sm text-body-sm text-[#6B7280] leading-relaxed">Deploy ke server, konfigurasi domain &amp; SSL, serah terima.</p>
+</div>
+</div>
+</section>
+<!-- SPACER -->
+<div class="my-20"></div>
+<!-- SECTION 2: FAQ -->
+<section class="w-full">
+<h2 class="font-headline-md text-headline-md font-bold tracking-tight text-[#14171F] mb-8">FAQ</h2>
+<div class="max-w-3xl flex flex-col gap-3">
+<!-- Item 1 (Expanded) -->
+<details class="group bg-surface-container-lowest border border-[#E5E7EB] rounded-[10px] p-5 cursor-pointer" open="">
+<summary class="flex justify-between items-center list-none select-none">
+<span class="font-body-md text-body-md font-medium text-[#14171F]">Berapa harga pembuatan website?</span>
+<svg class="w-4 h-4 text-[#6B7280] transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</summary>
+<div class="pt-3 border-t border-[#E5E7EB] mt-3">
+<p class="font-body-sm text-body-sm text-[#6B7280] leading-relaxed">
+            Harga mulai dari Rp 750K untuk paket Bronze hingga Rp 3.500K untuk paket Diamond, tergantung kebutuhan fitur dan kompleksitas sistem.
+          </p>
+</div>
+</details>
+<!-- Item 2 (Collapsed) -->
+<details class="group bg-surface-container-lowest border border-[#E5E7EB] rounded-[10px] p-5 cursor-pointer">
+<summary class="flex justify-between items-center list-none select-none">
+<span class="font-body-md text-body-md font-medium text-[#14171F]">Berapa kali bisa revisi?</span>
+<svg class="w-4 h-4 text-[#6B7280] transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</summary>
+<div class="pt-3 border-t border-[#E5E7EB] mt-3">
+<p class="font-body-sm text-body-sm text-[#6B7280] leading-relaxed">
+            Jumlah revisi disesuaikan dengan paket pilihan, umumnya berkisar antara 2 hingga penyesuaian minor tanpa batas sebelum tahap finalisasi.
+          </p>
+</div>
+</details>
+<!-- Item 3 (Collapsed) -->
+<details class="group bg-surface-container-lowest border border-[#E5E7EB] rounded-[10px] p-5 cursor-pointer">
+<summary class="flex justify-between items-center list-none select-none">
+<span class="font-body-md text-body-md font-medium text-[#14171F]">Apakah sudah termasuk domain dan hosting?</span>
+<svg class="w-4 h-4 text-[#6B7280] transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</summary>
+<div class="pt-3 border-t border-[#E5E7EB] mt-3">
+<p class="font-body-sm text-body-sm text-[#6B7280] leading-relaxed">
+            Ya, semua paket standar telah mencakup domain (.com / .id) serta cloud hosting aktif selama 1 tahun pertama beserta sertifikat SSL.
+          </p>
+</div>
+</details>
+<!-- Item 4 (Collapsed) -->
+<details class="group bg-surface-container-lowest border border-[#E5E7EB] rounded-[10px] p-5 cursor-pointer">
+<summary class="flex justify-between items-center list-none select-none">
+<span class="font-body-md text-body-md font-medium text-[#14171F]">Berapa lama pengerjaannya?</span>
+<svg class="w-4 h-4 text-[#6B7280] transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</summary>
+<div class="pt-3 border-t border-[#E5E7EB] mt-3">
+<p class="font-body-sm text-body-sm text-[#6B7280] leading-relaxed">
+            Waktu pengerjaan berkisar antara 3 hingga 14 hari kerja tergantung pada kelengkapan materi konten dan kompleksitas sistem.
+          </p>
+</div>
+</details>
+<!-- Item 5 (Collapsed) -->
+<details class="group bg-surface-container-lowest border border-[#E5E7EB] rounded-[10px] p-5 cursor-pointer">
+<summary class="flex justify-between items-center list-none select-none">
+<span class="font-body-md text-body-md font-medium text-[#14171F]">Bagaimana biaya perpanjangan?</span>
+<svg class="w-4 h-4 text-[#6B7280] transform transition-transform group-open:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</summary>
+<div class="pt-3 border-t border-[#E5E7EB] mt-3">
+<p class="font-body-sm text-body-sm text-[#6B7280] leading-relaxed">
+            Biaya perpanjangan tahun berikutnya hanya dikenakan untuk pembaruan domain dan sewa server hosting sesuai tarif reguler penyedia layanan.
+          </p>
+</div>
+</details>
+</div>
+</section>
+</div></main>
+</body></html>

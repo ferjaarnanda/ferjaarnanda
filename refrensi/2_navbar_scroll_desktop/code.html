@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="id"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Developer Service - Desktop Scrolled</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #FFFFFF;
+      color: #14171F;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-white text-[#14171F] relative">
+
+  <!-- Floating Capsule Navbar (Scrolled state) -->
+  <header class="fixed top-4 left-0 right-0 z-50 flex justify-center pointer-events-none px-4">
+    <nav class="pointer-events-auto inline-flex items-center gap-2 px-3 py-2 rounded-full border border-[rgba(255,255,255,0.35)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.6)] backdrop-blur-md" style="background-color: rgba(229, 37, 33, 0.78);">
+      <a href="#home" class="text-white text-sm font-medium px-4 py-1.5 rounded-full bg-[rgba(255,255,255,0.25)] transition-all">Home</a>
+      <a href="#jenis" class="text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-[rgba(255,255,255,0.15)] transition-all">Jenis</a>
+      <a href="#paket" class="text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-[rgba(255,255,255,0.15)] transition-all">Paket</a>
+      <a href="#kontak" class="text-white text-sm font-medium px-4 py-1.5 rounded-full hover:bg-[rgba(255,255,255,0.15)] transition-all">Kontak</a>
+    </nav>
+  </header>
+
+  <!-- Page Content (Scrolled slightly up, with content passing behind the navbar) -->
+  <main class="max-w-5xl mx-auto px-8 -mt-6 pt-24">
+    <div class="max-w-3xl">
+      <h1 class="text-5xl font-bold tracking-tight text-[#14171F] leading-[1.15] mb-6">
+        Jasa Pembuatan Website untuk Segala Kebutuhan
+      </h1>
+      <p class="text-lg text-[#6B7280] leading-relaxed mb-10 font-normal">
+        Dari toko online, company profile, blog, sistem reservasi, sampai sistem cashier dan sistem lainnya.
+      </p>
+      <div class="flex items-center gap-3">
+        <a href="#view-cv" class="inline-flex items-center justify-center bg-[#E52521] text-white font-medium text-base h-11 px-6 rounded-[10px] hover:bg-[#d0201c] transition-colors">
+          View CV
+        </a>
+        <a href="#download-cv" class="inline-flex items-center justify-center bg-white text-[#E52521] border border-[#E52521] font-medium text-base h-11 px-6 rounded-[10px] hover:bg-red-50 transition-colors">
+          Download CV
+        </a>
+      </div>
+    </div>
+  </main>
+
+
+</body></html>

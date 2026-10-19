@@ -1,0 +1,354 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-press-start-2p: 'Press Start 2P', monospace;
+  --cap-pad: 56px;
+}
+
+@media (max-width: 1023px) {
+  :root {
+    --cap-pad: 20px;
+  }
+}
+
+@supports not (backdrop-filter: blur(16px)) {
+  .nav-capsule-bg {
+    background-color: rgba(229, 37, 33, 0.92) !important;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+  background-color: #FFFFFF;
+  color: #14171F;
+}
+
+body {
+  background-color: #FFFFFF;
+  color: #14171F;
+  font-family: var(--font-inter);
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Anchored sections scroll margin */
+section[id] {
+  scroll-margin-top: 96px;
+}
+
+/* Accessible visible focus ring */
+:focus-visible {
+  outline: 2px solid #E52521;
+  outline-offset: 2px;
+}
+
+/* Button styles per Design System (Section 2) */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  min-height: 44px;
+  background-color: #E52521;
+  color: #FFFFFF;
+  border-radius: 10px;
+  font-weight: 500;
+  border: none;
+  box-shadow: none;
+  transition: background-color 150ms ease, transform 150ms ease;
+}
+.btn-primary:hover {
+  background-color: #C81E1B;
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  background-color: #A81714;
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  min-height: 44px;
+  background-color: #FFFFFF;
+  color: #E52521;
+  border: 1px solid #E52521;
+  border-radius: 10px;
+  font-weight: 500;
+  box-shadow: none;
+  transition: background-color 150ms ease, transform 150ms ease;
+}
+.btn-secondary:hover {
+  background-color: #FFF5F5;
+  transform: translateY(-1px);
+}
+.btn-secondary:active {
+  transform: translateY(0);
+}
+
+/* =========================================================
+   MARIO ZONE RULES (Strictly Scoped)
+   Only active inside .mario-zone
+   ========================================================= */
+.mario-zone {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+.mario-zone img,
+.mario-zone .pixel-art {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+.mario-zone .mario-box {
+  border: 4px solid #2B1B0E;
+  border-radius: 0 !important;
+  box-shadow: 6px 6px 0px 0px #2B1B0E;
+}
+
+.mario-zone .mario-box-lg {
+  border: 4px solid #2B1B0E;
+  border-radius: 0 !important;
+  box-shadow: 12px 12px 0px 0px #2B1B0E;
+}
+
+.mario-zone .mario-box-sm {
+  border: 2px solid #2B1B0E;
+  border-radius: 0 !important;
+  box-shadow: 3px 3px 0px 0px #2B1B0E;
+}
+
+.mario-zone .mario-font {
+  font-family: var(--font-press-start-2p);
+}
+
+.mario-zone .mario-sky-bands {
+  background: linear-gradient(
+    to bottom,
+    #5C94FC 0%,
+    #5C94FC 25%,
+    #6EA2FD 25%,
+    #6EA2FD 50%,
+    #82B1FE 50%,
+    #82B1FE 75%,
+    #A6C8FF 75%,
+    #A6C8FF 100%
+  );
+}
+
+@keyframes coin-spin {
+  to {
+    background-position-x: calc(-648px * var(--s));
+  }
+}
+
+.mario-zone .coin,
+.mario-zone .coin-sprite {
+  --s: 6;
+  width: calc(27px * var(--s));
+  height: calc(35px * var(--s));
+  background: url('/coins/spin24-gold.png') 0 0 / calc(648px * var(--s)) calc(35px * var(--s)) no-repeat;
+  image-rendering: pixelated;
+  animation: coin-spin 1.2s steps(24) infinite;
+  transition: transform 150ms ease;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1023px) {
+  .mario-zone .coin,
+  .mario-zone .coin-sprite {
+    --s: 4;
+  }
+}
+
+.mario-zone .coin-card:hover .coin,
+.mario-zone .coin-card:hover .coin-sprite,
+.mario-zone .coin:hover,
+.mario-zone .coin-sprite:hover {
+  transform: translateY(-6px);
+}
+
+.mario-zone .coin-shadow {
+  --s: 6;
+  width: calc(18px * var(--s));
+  height: calc(2px * var(--s));
+  background-color: rgba(43, 27, 14, 0.28);
+  border-radius: 50%;
+  box-shadow: none;
+  filter: none;
+  transition: transform 150ms ease;
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1023px) {
+  .mario-zone .coin-shadow {
+    --s: 4;
+  }
+}
+
+.mario-zone .coin-card:hover .coin-shadow {
+  transform: scale(0.82);
+}
+
+/* Pricing Cards Equal Size Grid & Mobile Snap Scroll (Section 5.5) */
+.mario-zone .paket-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 24px;
+  width: 100%;
+  align-items: stretch;
+}
+
+.mario-zone .paket-cards-grid > .coin-card {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 4px solid #2B1B0E;
+  box-shadow: 6px 6px 0px 0px #2B1B0E;
+  padding: 24px;
+  background-color: #FFFFFF;
+  border-radius: 0;
+  position: relative;
+}
+
+.mario-zone .paket-cards-grid > .coin-card:nth-child(4) {
+  grid-column: 2 / span 2;
+}
+
+.mario-zone .paket-cards-grid > .coin-card:nth-child(5) {
+  grid-column: 4 / span 2;
+}
+
+.mario-zone .coin-window {
+  width: 100%;
+  height: 240px;
+  min-height: 240px;
+  max-height: 240px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border: 4px solid #2B1B0E;
+  border-radius: 0;
+}
+
+@media (max-width: 1023px) {
+  .mario-zone .paket-cards-grid {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    gap: 24px;
+    padding: 16px 20px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .mario-zone .paket-cards-grid::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mario-zone .paket-cards-grid > .coin-card {
+    flex: 0 0 300px;
+    width: 300px;
+    min-width: 300px;
+    max-width: 300px;
+    height: auto;
+    scroll-snap-align: center;
+  }
+}
+
+@keyframes cloud-drift-w1 {
+  0% { transform: translate3d(380px, 0, 0); }
+  100% { transform: translate3d(-100px, 0, 0); }
+}
+
+@keyframes cloud-drift-w2 {
+  0% { transform: translate3d(400px, 0, 0); }
+  100% { transform: translate3d(-110px, 0, 0); }
+}
+
+@keyframes cloud-drift-w3 {
+  0% { transform: translate3d(370px, 0, 0); }
+  100% { transform: translate3d(-90px, 0, 0); }
+}
+
+.mario-zone .cloud-drift-1 {
+  animation: cloud-drift-w1 16s linear infinite;
+}
+.mario-zone .cloud-drift-2 {
+  animation: cloud-drift-w2 24s linear infinite;
+}
+.mario-zone .cloud-drift-3 {
+  animation: cloud-drift-w3 19s linear infinite;
+}
+
+.mario-zone[data-paused="true"] .coin,
+.mario-zone[data-paused="true"] .coin-sprite,
+.mario-zone[data-paused="true"] .cloud-drift-1,
+.mario-zone[data-paused="true"] .cloud-drift-2,
+.mario-zone[data-paused="true"] .cloud-drift-3 {
+  animation-play-state: paused;
+}
+
+@keyframes minicoin-spin {
+  to {
+    background-position-x: calc(-56px * var(--mc-scale, 3));
+  }
+}
+
+.mario-zone .minicoin-sprite {
+  --mc-scale: 3;
+  width: calc(14px * var(--mc-scale));
+  height: calc(18px * var(--mc-scale));
+  background-image: url('/environment/minicoin-sheet.png');
+  background-position: 0 0;
+  background-size: calc(56px * var(--mc-scale)) calc(18px * var(--mc-scale));
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  animation: minicoin-spin 0.5s steps(4) infinite;
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .btn-primary:hover,
+  .btn-secondary:hover {
+    transform: none !important;
+  }
+  .mario-zone .coin,
+  .mario-zone .coin-sprite,
+  .mario-zone .minicoin-sprite,
+  .mario-zone .cloud-drift-1,
+  .mario-zone .cloud-drift-2,
+  .mario-zone .cloud-drift-3 {
+    animation: none !important;
+    background-position: 0 0 !important;
+    transform: none !important;
+  }
+  .mario-zone .coin-card:hover .coin-shadow {
+    transform: none !important;
+  }
+}

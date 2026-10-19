@@ -1,0 +1,127 @@
+{
+ "groundY": 168,
+ "height": 216,
+ "loading": {
+  "width": 1920,
+  "tile": 16,
+  "pits": [
+   {
+    "startX": 256,
+    "width": 64
+   },
+   {
+    "startX": 544,
+    "width": 64
+   },
+   {
+    "startX": 832,
+    "width": 64
+   }
+  ],
+  "rainbowCoin": {
+   "x": 1080,
+   "y": 58,
+   "sprite": "public/coins/spin-rainbow.png (6 frames, 216x280 each, display about 54x70)"
+  },
+  "pipes": {
+   "tall": {
+    "x": 1160
+   },
+   "medium": {
+    "x": 1230
+   }
+  },
+  "stairs": {
+   "x": 1380,
+   "steps": 5
+  },
+  "flag": {
+   "x": 1660,
+   "y": 70,
+   "frames": "flag-1..4"
+  },
+  "sequence": "run -> jump pit1 -> pit2 -> pit3 -> collect rainbow coin (x~1080) -> meteor from top right -> impact -> wipe. Pipes/stairs/flag are scenery at the end of the strip.",
+  "note": "bushes re-grounded; none over pits"
+ },
+ "jenis": {
+  "width": 640,
+  "pipes": {
+   "short": {
+    "x": 430,
+    "top": 138
+   },
+   "medium": {
+    "x": 470,
+    "top": 122
+   },
+   "tall": {
+    "x": 510,
+    "top": 106
+   }
+  },
+  "plant": {
+   "sprite": "plant-1..4 (32x64)",
+   "frames": "1 closed, 2 half, 3 wide open, 4 snap",
+   "onPipe": "medium",
+   "x": 471,
+   "hiddenTopOffset": 8,
+   "raisedTopOffset": -52,
+   "clipBottomOffset": 12,
+   "note": "draw plant BEHIND the pipe sprite inside a container clipped (overflow hidden) at pipe.top+12px"
+  }
+ },
+ "console": {
+  "world": {
+   "width": 480,
+   "height": 216,
+   "groundY": 168,
+   "view": "show world x from (480 - Wn) to 480 (anchored to the RIGHT edge); Wn = floor(frameInnerWidth / K)"
+  },
+  "pipes": {
+   "short": {
+    "x": 366,
+    "top": 138
+   },
+   "medium": {
+    "x": 406,
+    "top": 122
+   },
+   "tall": {
+    "x": 446,
+    "top": 106
+   },
+   "width": 34,
+   "colliderInset": 1
+  },
+  "plant": {
+   "x": 407,
+   "hiddenTop": 130,
+   "raisedTop": 70,
+   "clipY": 134
+  },
+  "blocks": {
+   "row": {
+    "x": 216,
+    "y": 88,
+    "pattern": "BBQBB",
+    "tile": 16,
+    "note": "single ? block at x=248 (center x=256), two bricks on each side"
+   }
+  },
+  "hero": {
+   "frame": [
+    36,
+    50
+   ],
+   "feetY": 48,
+   "centerX": 18,
+   "hitbox": {
+    "w": 18,
+    "h": 42,
+    "offsetX": 9,
+    "offsetY": 6
+   }
+  },
+  "file": "console-back.png (ground, hills, rainbow, grounded bushes baked in; blocks, pipes, plant, coin and hero are separate)"
+ }
+}

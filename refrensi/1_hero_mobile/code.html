@@ -1,0 +1,77 @@
+<!DOCTYPE html><html lang="id"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Developer Service - Mobile (Portrait)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: '#E52521',
+            textMain: '#14171F',
+            textMuted: '#6B7280',
+            borderLight: '#E5E7EB',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #FFFFFF;
+      color: #14171F;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+  </style>
+</head>
+<body class="bg-white min-h-[844px] w-full max-w-[390px] mx-auto flex flex-col justify-between">
+  <div>
+    <!-- Navbar: Flat white bar, 1px bottom border, centered links with 24px gap, 14px text, Home with small red underline -->
+    <header class="w-full bg-white border-b border-[#E5E7EB] py-3.5 px-4">
+      <nav class="flex items-center justify-center gap-[24px]">
+        <a href="#home" class="text-[14px] font-medium text-[#14171F] pb-1 border-b-2 border-[#E52521]">Home</a>
+        <a href="#jenis" class="text-[14px] font-medium text-[#6B7280] pb-1 hover:text-[#14171F] transition-colors">Jenis</a>
+        <a href="#paket" class="text-[14px] font-medium text-[#6B7280] pb-1 hover:text-[#14171F] transition-colors">Paket</a>
+        <a href="#kontak" class="text-[14px] font-medium text-[#6B7280] pb-1 hover:text-[#14171F] transition-colors">Kontak</a>
+      </nav>
+    </header>
+
+    <!-- Main Content Container with ~48px top space and padding -->
+    <main class="pt-[48px] px-6">
+      <!-- Heading: Left-aligned, 28px bold, wrapping to 3 lines -->
+      <h1 class="text-[28px] font-bold leading-[1.25] text-[#14171F] max-w-[270px] tracking-tight">
+        Jasa Pembuatan Website untuk Segala Kebutuhan
+      </h1>
+
+      <!-- Subtitle: 15px muted gray, comfortable line height -->
+      <p class="mt-4 text-[15px] leading-[1.6] text-[#6B7280]">
+        Dari toko online, company profile, blog, sistem reservasi, sampai sistem cashier dan sistem lainnya.
+      </p>
+
+      <!-- Row of two buttons side by side, left-aligned, 44px high, 12px gap, content-sized -->
+      <div class="mt-7 flex flex-row items-center gap-[12px]">
+        <button class="h-[44px] px-[24px] bg-[#E52521] text-white text-[14px] font-medium rounded-[10px] inline-flex items-center justify-center whitespace-nowrap active:opacity-90">
+          View CV
+        </button>
+        <button class="h-[44px] px-[24px] bg-white border border-[#E52521] text-[#E52521] text-[14px] font-medium rounded-[10px] inline-flex items-center justify-center whitespace-nowrap active:bg-red-50">
+          Download CV
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <!-- Generous white space until bottom of 844px screen -->
+  <div class="h-[200px]"></div>
+
+
+</body></html>
