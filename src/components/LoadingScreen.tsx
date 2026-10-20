@@ -80,7 +80,7 @@ const INITIAL_CLOUDS: CloudInstance[] = [
 ];
 
 export default function LoadingScreen() {
-  const [visible, setVisible] = useState<boolean>(false);
+  const [visible, setVisible] = useState<boolean>(true);
   const [isWiping, setIsWiping] = useState<boolean>(false);
   const [reducedFadeOut, setReducedFadeOut] = useState<boolean>(false);
 

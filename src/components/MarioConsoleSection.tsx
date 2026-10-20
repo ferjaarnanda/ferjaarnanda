@@ -484,6 +484,8 @@ export default function MarioConsoleSection() {
     let resumeLastDir: 1 | -1 = 1;
     let solidPenetrationCount = 0;
     let wasTouchingQBlockUnderside = false;
+    let stepOffCount = 0;
+    let landSquashCount = 0;
 
     // MOTION SMOOTHNESS (Section 5.4 line 199):
     // Hops are analytic parabolas with a short anticipation (hop frame 9 for 80ms)
@@ -1589,7 +1591,13 @@ export default function MarioConsoleSection() {
         } else {
           waitResumeTimer += dt;
           heroFrame = Math.floor(waitResumeTimer / 0.3) % 2 === 0 ? 0 : 1;
-          if (waitResumeTimer >= 2.5 || rainbowState === "RAINBOW") {
+          const forceResume =
+            typeof window !== "undefined" &&
+            Boolean((window as unknown as { __forcePlatformResume?: boolean }).__forcePlatformResume);
+          if (waitResumeTimer >= 2.5 || rainbowState === "RAINBOW" || forceResume) {
+            if (forceResume && typeof window !== "undefined") {
+              (window as unknown as { __forcePlatformResume?: boolean }).__forcePlatformResume = false;
+            }
             resumeFromCurrentSurface();
           }
         }
@@ -2039,6 +2047,7 @@ export default function MarioConsoleSection() {
 
             if (phaseTimer >= 0.3) {
               // Step off without teleport: smooth initial horizontal step
+              stepOffCount += 1;
               heroVx = blockWalkDir * 35;
               heroVy = 0; // begins falling with gravity easing in
               heroX = blockTargetEdgeX; // NO TELEPORT!
@@ -2066,6 +2075,7 @@ export default function MarioConsoleSection() {
             if (res.hitCeiling && heroVy < 0) heroVy = 0;
 
             if (res.landedOn) {
+              landSquashCount += 1;
               heroVx = 0;
               heroVy = 0;
               heroY = GROUND_Y;
@@ -2786,6 +2796,8 @@ export default function MarioConsoleSection() {
       frameEl.dataset.collectCount = String(collectCount);
       frameEl.dataset.solidPenetration = String(solidPenetrationCount);
       frameEl.dataset.blockTargetEdgeX = String(blockTargetEdgeX);
+      frameEl.dataset.stepOffCount = String(stepOffCount);
+      frameEl.dataset.landSquashCount = String(landSquashCount);
       frameEl.dataset.loopCount = String(loopCount);
       frameEl.dataset.wn = String(wn);
       frameEl.dataset.scaleK = String(scaleK);
@@ -3002,9 +3014,22 @@ export default function MarioConsoleSection() {
     document.addEventListener("visibilitychange", onVisChange);
 
     renderScene();
+    if (typeof window !== "undefined") {
+      (window as unknown as { __dropHeroOnBlocks?: (wx?: number) => void }).__dropHeroOnBlocks = (wx = 250) => {
+        heroX = wx;
+        heroY = BLOCKS_Y;
+        heroVx = 0;
+        heroVy = 0;
+        isDragging = false;
+        resumeFromCurrentSurface();
+      };
+    }
     startLoop();
 
     return () => {
+      if (typeof window !== "undefined") {
+        delete (window as unknown as { __dropHeroOnBlocks?: unknown }).__dropHeroOnBlocks;
+      }
       stopLoop();
       io.disconnect();
       document.removeEventListener("visibilitychange", onVisChange);
