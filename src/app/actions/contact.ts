@@ -1,17 +1,9 @@
 "use server";
 
-import { z } from "zod";
 import { Resend } from "resend";
 import { headers } from "next/headers";
 import { siteConfig } from "@/data/site";
-
-const contactSchema = z.object({
-  nama: z.string().trim().min(2, "Nama minimal 2 karakter"),
-  email: z.string().trim().email("Format email tidak valid"),
-  jenis: z.string().trim().min(1, "Pilih jenis website"),
-  pesan: z.string().trim().min(5, "Pesan minimal 5 karakter"),
-  _hp: z.string().max(0, "Spam detected"),
-});
+import { contactSchema, ContactFormData } from "@/lib/contact-schema";
 
 export type ContactState = {
   success?: boolean;
@@ -41,8 +33,7 @@ function isRateLimited(ip: string): boolean {
 }
 
 export async function sendContactMessage(
-  _prevState: ContactState | null,
-  formData: FormData
+  payload: FormData | ContactFormData
 ): Promise<ContactState> {
   const headerList = await headers();
   const ip =
@@ -53,19 +44,26 @@ export async function sendContactMessage(
   if (isRateLimited(ip)) {
     return {
       success: false,
-      error: "Terlalu banyak permintaan. Silakan coba lagi beberapa saat lagi atau hubungi via WhatsApp.",
+      error:
+        "Terlalu banyak permintaan. Silakan coba lagi beberapa saat lagi atau hubungi via WhatsApp.",
       fallbackToWa: true,
       waUrl: siteConfig.contacts.whatsappUrl,
     };
   }
 
-  const raw = {
-    nama: formData.get("nama")?.toString() || "",
-    email: formData.get("email")?.toString() || "",
-    jenis: formData.get("jenis")?.toString() || "",
-    pesan: formData.get("pesan")?.toString() || "",
-    _hp: formData.get("_hp")?.toString() || "",
-  };
+  let raw: ContactFormData;
+  if (payload instanceof FormData) {
+    raw = {
+      nama: payload.get("nama")?.toString() || "",
+      email: payload.get("email")?.toString() || "",
+      jenis: payload.get("jenis")?.toString() || "",
+      customJenis: payload.get("customJenis")?.toString() || "",
+      pesan: payload.get("pesan")?.toString() || "",
+      _hp: payload.get("_hp")?.toString() || "",
+    };
+  } else {
+    raw = payload;
+  }
 
   const parsed = contactSchema.safeParse(raw);
   if (!parsed.success) {
@@ -76,10 +74,14 @@ export async function sendContactMessage(
     };
   }
 
-  const { nama, email, jenis, pesan } = parsed.data;
+  const { nama, email, jenis, customJenis, pesan } = parsed.data;
+  const jenisDisplay =
+    jenis === "Lainnya" && customJenis
+      ? `Lainnya (${customJenis})`
+      : jenis;
 
   // Prefilled WhatsApp URL as fallback
-  const waMessage = `Halo Ferja Arnanda, perkenalkan saya ${nama} (${email}). Saya tertarik dengan: ${jenis}.\n\nPesan:\n${pesan}`;
+  const waMessage = `Halo Ferja Arnanda, perkenalkan saya ${nama} (${email}). Saya tertarik dengan: ${jenisDisplay}.\n\nPesan:\n${pesan}`;
   const waUrl = `https://wa.me/${siteConfig.contacts.whatsappNumber.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(waMessage)}`;
 
   const resendApiKey = process.env.RESEND_API_KEY;
@@ -89,7 +91,8 @@ export async function sendContactMessage(
   if (!resendApiKey) {
     return {
       success: false,
-      error: "Layanan email otomatis sedang tidak aktif. Silakan hubungi langsung melalui WhatsApp.",
+      error:
+        "Layanan email otomatis sedang tidak aktif. Silakan hubungi langsung melalui WhatsApp.",
       fallbackToWa: true,
       waUrl,
     };
@@ -101,8 +104,8 @@ export async function sendContactMessage(
       from: process.env.RESEND_FROM_EMAIL || "Ferja Portfolio <onboarding@resend.dev>",
       to: [toEmail],
       replyTo: email,
-      subject: `Pesan Baru dari ${nama} - ${jenis}`,
-      text: `Nama: ${nama}\nEmail: ${email}\nJenis Website: ${jenis}\n\nPesan:\n${pesan}`,
+      subject: `Pesan Baru dari ${nama} - ${jenisDisplay}`,
+      text: `Nama: ${nama}\nEmail: ${email}\nJenis Website: ${jenisDisplay}\n\nPesan:\n${pesan}`,
     });
 
     if (error) {

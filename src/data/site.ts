@@ -18,9 +18,9 @@ export interface SiteConfig {
 
 const whatsappNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "6289513062106";
 const gmail = process.env.NEXT_PUBLIC_GMAIL || "arn.techdev@gmail.com";
-const githubUrl = process.env.NEXT_PUBLIC_GITHUB_URL || "https://github.com/ferjaarnanda";
-const linkedinUrl = process.env.NEXT_PUBLIC_LINKEDIN_URL || "https://linkedin.com/in/ferjaarnanda";
-const instagramUrl = process.env.NEXT_PUBLIC_INSTAGRAM_URL || "https://instagram.com/ferjaarnanda";
+const githubUrl = process.env.NEXT_PUBLIC_GITHUB_URL || "";
+const linkedinUrl = process.env.NEXT_PUBLIC_LINKEDIN_URL || "";
+const instagramUrl = process.env.NEXT_PUBLIC_INSTAGRAM_URL || "";
 
 export const siteConfig: SiteConfig = {
   name: "Ferja Arnanda",

@@ -16,11 +16,21 @@ const pressStart2P = Press_Start_2P({
 });
 
 export const metadata: Metadata = {
-  title: "Ferja Arnanda — Jasa Pembuatan Website untuk Segala Kebutuhan",
+  title: "Ferja Arnanda - Jasa Buat Website",
   description:
     "Dari toko online, company profile, blog, sistem reservasi, sampai sistem cashier dan sistem lainnya.",
-  icons: {
-    icon: "/favicon.ico",
+  openGraph: {
+    title: "Ferja Arnanda - Jasa Buat Website",
+    description:
+      "Dari toko online, company profile, blog, sistem reservasi, sampai sistem cashier dan sistem lainnya.",
+    type: "website",
+    locale: "id_ID",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Ferja Arnanda - Jasa Buat Website",
+    description:
+      "Dari toko online, company profile, blog, sistem reservasi, sampai sistem cashier dan sistem lainnya.",
   },
 };
 
