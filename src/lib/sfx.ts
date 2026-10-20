@@ -2,11 +2,19 @@
 
 // Web Audio API sound effects synthesizer (no external audio files)
 // Safely handles browser autoplay policies by catching/ignoring blocked contexts.
+// PERFORMANCE RULE (4): Pre-render the chime into an AudioBuffer at startup and play it
+// through a BufferSource; never build oscillator graphs on the first coin.
 
 let audioCtx: AudioContext | null = null;
 let muted = false;
 let lastCoinTime = 0;
 let coinStep = 0;
+
+// Pre-rendered AudioBuffers
+const coinBuffers: AudioBuffer[] = [];
+let boomBuffer: AudioBuffer | null = null;
+let crunchBuffer: AudioBuffer | null = null;
+let buffersInitialized = false;
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === "undefined" || muted) return null;
@@ -30,6 +38,107 @@ function getAudioContext(): AudioContext | null {
   }
 }
 
+function prebuildAudioBuffers(): void {
+  if (buffersInitialized || !audioCtx) return;
+  buffersInitialized = true;
+
+  try {
+    const sampleRate = audioCtx.sampleRate || 44100;
+
+    // 1. Pre-render 15 coin chime buffers (steps 0..14, rising by 1 semitone each)
+    // 2 quick sine notes: 1320 Hz then 1760 Hz, 90ms each, soft envelope
+    const note1Dur = 0.09;
+    const note2Dur = 0.13;
+    const totalCoinDur = note1Dur + note2Dur;
+    const coinSamples = Math.ceil(sampleRate * totalCoinDur);
+
+    for (let step = 0; step < 15; step++) {
+      const pitchMult = Math.pow(2, step / 12);
+      const f1 = 1320 * pitchMult;
+      const f2 = 1760 * pitchMult;
+
+      const buf = audioCtx.createBuffer(1, coinSamples, sampleRate);
+      const data = buf.getChannelData(0);
+
+      for (let i = 0; i < coinSamples; i++) {
+        const t = i / sampleRate;
+        let sample = 0;
+
+        if (t < note1Dur) {
+          // Note 1: 1320 Hz
+          const phase = 2 * Math.PI * f1 * t;
+          let env = 0;
+          if (t < 0.01) {
+            env = 0.001 + (t / 0.01) * (0.14 - 0.001);
+          } else {
+            const decayFrac = (t - 0.01) / (note1Dur - 0.01);
+            env = 0.14 * Math.exp(-decayFrac * 4.5);
+          }
+          sample = Math.sin(phase) * env;
+        } else {
+          // Note 2: 1760 Hz
+          const t2 = t - note1Dur;
+          const phase = 2 * Math.PI * f2 * t2;
+          let env = 0;
+          if (t2 < 0.01) {
+            env = 0.001 + (t2 / 0.01) * (0.16 - 0.001);
+          } else {
+            const decayFrac = (t2 - 0.01) / (note2Dur - 0.01);
+            env = 0.16 * Math.exp(-decayFrac * 3.8);
+          }
+          sample = Math.sin(phase) * env;
+        }
+
+        data[i] = sample;
+      }
+      coinBuffers.push(buf);
+    }
+
+    // 2. Pre-render Boom buffer (0.25s)
+    const boomDur = 0.25;
+    const boomSamples = Math.ceil(sampleRate * boomDur);
+    boomBuffer = audioCtx.createBuffer(1, boomSamples, sampleRate);
+    const bData = boomBuffer.getChannelData(0);
+    let boomPhase = 0;
+    for (let i = 0; i < boomSamples; i++) {
+      const t = i / sampleRate;
+      const freq = 160 * Math.exp(-t * 6.5);
+      boomPhase += 2 * Math.PI * freq * (1 / sampleRate);
+      const env = 0.18 * Math.exp(-t * 18);
+      // Triangle wave
+      const tri = (2 / Math.PI) * Math.asin(Math.sin(boomPhase));
+      bData[i] = tri * env;
+    }
+
+    // 3. Pre-render Crunch buffer (0.10s)
+    const crunchDur = 0.1;
+    const crunchSamples = Math.ceil(sampleRate * crunchDur);
+    crunchBuffer = audioCtx.createBuffer(1, crunchSamples, sampleRate);
+    const cData = crunchBuffer.getChannelData(0);
+    let crunchPhase = 0;
+    for (let i = 0; i < crunchSamples; i++) {
+      const t = i / sampleRate;
+      const freq = 220 - (t / 0.08) * 125;
+      crunchPhase += 2 * Math.PI * freq * (1 / sampleRate);
+      const env = 0.12 * Math.exp(-t * 28);
+      // Sawtooth wave
+      const saw = 2 * ((crunchPhase / (2 * Math.PI)) % 1) - 1;
+      cData[i] = saw * env;
+    }
+  } catch {
+    // If buffer creation fails, stay silent
+  }
+}
+
+/**
+ * Startup initializer to pre-create AudioContext and build AudioBuffers
+ */
+export function initAudio(): void {
+  if (typeof window === "undefined") return;
+  getAudioContext();
+  prebuildAudioBuffers();
+}
+
 export function isSfxMuted(): boolean {
   return muted;
 }
@@ -44,7 +153,7 @@ export function toggleSfxMuted(): boolean {
 }
 
 /**
- * Synthesizes a Mario-style two-note coin "kling" chime (1320 Hz -> 1760 Hz, 90ms each, soft envelope).
+ * Mario-style two-note coin "kling" chime played instantly from pre-rendered AudioBuffer.
  * Consecutive coins within 1.2s rise one semitone step each and reset afterwards.
  */
 export function playCoinKling(): void {
@@ -58,92 +167,59 @@ export function playCoinKling(): void {
   lastCoinTime = nowMs;
 
   const ctx = getAudioContext();
-  if (!ctx || ctx.state !== "running") return;
+  if (!ctx) return;
+  if (!buffersInitialized) prebuildAudioBuffers();
+
+  const buffer = coinBuffers[coinStep];
+  if (!buffer) return;
 
   try {
-    const pitchMult = Math.pow(2, coinStep / 12);
-    const f1 = 1320 * pitchMult;
-    const f2 = 1760 * pitchMult;
-    const t0 = ctx.currentTime;
-    const noteDur = 0.09;
-
-    // First note (90ms)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(f1, t0);
-    gain1.gain.setValueAtTime(0.001, t0);
-    gain1.gain.linearRampToValueAtTime(0.14, t0 + 0.01);
-    gain1.gain.exponentialRampToValueAtTime(0.001, t0 + noteDur);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(t0);
-    osc1.stop(t0 + noteDur);
-
-    // Second note (90ms)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = "sine";
-    osc2.frequency.setValueAtTime(f2, t0 + noteDur);
-    gain2.gain.setValueAtTime(0.001, t0 + noteDur);
-    gain2.gain.linearRampToValueAtTime(0.16, t0 + noteDur + 0.01);
-    gain2.gain.exponentialRampToValueAtTime(0.001, t0 + noteDur * 2 + 0.04);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(t0 + noteDur);
-    osc2.stop(t0 + noteDur * 2 + 0.05);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ctx.destination);
+    src.start();
   } catch {
     // Stay silent if blocked or unsupported
   }
 }
 
 /**
- * Synthesizes a short retro explosion/boom sound.
+ * Short retro explosion/boom sound played from pre-rendered AudioBuffer.
  */
 export function playBoomSfx(): void {
   if (muted) return;
   const ctx = getAudioContext();
-  if (!ctx || ctx.state !== "running") return;
+  if (!ctx) return;
+  if (!buffersInitialized) prebuildAudioBuffers();
+
+  if (!boomBuffer) return;
 
   try {
-    const t0 = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "triangle";
-    osc.frequency.setValueAtTime(160, t0);
-    osc.frequency.exponentialRampToValueAtTime(38, t0 + 0.22);
-    gain.gain.setValueAtTime(0.18, t0);
-    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.24);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(t0);
-    osc.stop(t0 + 0.25);
+    const src = ctx.createBufferSource();
+    src.buffer = boomBuffer;
+    src.connect(ctx.destination);
+    src.start();
   } catch {
     // Stay silent if blocked
   }
 }
 
 /**
- * Synthesizes a short crunch bite sound.
+ * Short crunch bite sound played from pre-rendered AudioBuffer.
  */
 export function playCrunchSfx(): void {
   if (muted) return;
   const ctx = getAudioContext();
-  if (!ctx || ctx.state !== "running") return;
+  if (!ctx) return;
+  if (!buffersInitialized) prebuildAudioBuffers();
+
+  if (!crunchBuffer) return;
 
   try {
-    const t0 = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(220, t0);
-    osc.frequency.linearRampToValueAtTime(95, t0 + 0.08);
-    gain.gain.setValueAtTime(0.12, t0);
-    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.09);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(t0);
-    osc.stop(t0 + 0.1);
+    const src = ctx.createBufferSource();
+    src.buffer = crunchBuffer;
+    src.connect(ctx.destination);
+    src.start();
   } catch {
     // Stay silent if blocked
   }

@@ -41,6 +41,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id" className={`${inter.variable} ${pressStart2P.variable} scroll-smooth`}>
+      <head>
+        {/* Preload critical loader assets to prevent any mid-animation decoding hitches */}
+        <link rel="preload" href="/character/devj-sheet-nobubble.png" as="image" />
+        <link rel="preload" href="/environment/level-loading-ground.png" as="image" />
+        <link rel="preload" href="/environment/level-loading-decor.png" as="image" />
+        <link rel="preload" href="/environment/minicoin-sheet.png" as="image" />
+        <link rel="preload" href="/coins/spin24-rainbow.png" as="image" />
+      </head>
       <body className="bg-white text-obsidian antialiased min-h-screen">
         {children}
       </body>

@@ -12,21 +12,31 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const prefersReducedMotion = useReducedMotion();
-  const [isScrolled, setIsScrolled] = useState(false);
+  const [isScrolled, setIsScrolled] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return window.scrollY > 48;
+    }
+    return false;
+  });
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [activeSection, setActiveSection] = useState("home");
   const linkRowRef = useRef<HTMLDivElement>(null);
   const transitionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // --cap-inset calculation state in px
+  // --cap-inset calculation state in px with valid initial defaults
   const [capMetrics, setCapMetrics] = useState<{
     inset: number;
     width: number;
     padX: number;
-  }>({
-    inset: 480,
-    width: 480,
-    padX: 56,
+  }>(() => {
+    if (typeof window !== "undefined") {
+      const vw = window.innerWidth;
+      const padX = vw >= 1024 ? 56 : 20;
+      const approxWidth = vw >= 1024 ? 480 : Math.min(300, Math.max(260, vw - 40));
+      const inset = Math.max(0, Math.round((vw - approxWidth) / 2));
+      return { inset, width: approxWidth, padX };
+    }
+    return { inset: 480, width: 480, padX: 56 };
   });
 
   // Calculate --cap-inset and --cap-width in px
@@ -158,7 +168,12 @@ export default function Navbar() {
   } as React.CSSProperties;
 
   return (
-    <header className="nav-header" style={cssVars}>
+    <header
+      className={`nav-header ${isScrolled ? "is-scrolled" : ""} ${
+        isTransitioning ? "is-transitioning" : ""
+      }`}
+      style={cssVars}
+    >
       {/* ONE background element that morphs with clip-path:
           - State A: clip-path: inset(0px 0px 24px 0px round 0px) (64px flat bar)
           - State B: clip-path: inset(16px var(--cap-inset) 16px var(--cap-inset) round 28px) (56px capsule)

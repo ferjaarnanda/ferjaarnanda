@@ -170,9 +170,11 @@ type RoutePhase =
   | "BLOCKS_WALK_TO_EDGE"
   | "BLOCKS_EDGE_PAUSE"
   | "BLOCKS_STEP_OFF_FALL"
+  | "BLOCKS_LAND_SQUASH"
   | "HOP_BLOCKS_TO_GROUND"
   | "DRAGGING"
   | "AIR_FALL"
+  | "DROP_LAND_SQUASH"
   | "WAIT_RESUME"
   | "EATEN_HIDDEN"
   | "SPAT_OUT_ARC";
@@ -386,6 +388,8 @@ export default function MarioConsoleSection() {
 
     let heroX = farLeftWalkX;
     let heroY = GROUND_Y;
+    let prevHeroX = farLeftWalkX;
+    let prevHeroY = GROUND_Y;
     let heroVx = 0;
     let heroVy = 0;
     let facing: 1 | -1 = 1;
@@ -481,6 +485,14 @@ export default function MarioConsoleSection() {
     let solidPenetrationCount = 0;
     let wasTouchingQBlockUnderside = false;
 
+    // MOTION SMOOTHNESS (Section 5.4 line 199):
+    // Hops are analytic parabolas with a short anticipation (hop frame 9 for 80ms)
+    // and a landing squash (breathe frame 1 for 80ms).
+    const HOP_ANTICIPATION = 0.08;
+    const HOP_FLIGHT_TIME = 0.50;
+    const HOP_LANDING_SQUASH = 0.08;
+    const TOTAL_HOP_TIME = HOP_ANTICIPATION + HOP_FLIGHT_TIME + HOP_LANDING_SQUASH;
+
     const startHop = (
       x0: number,
       y0: number,
@@ -497,6 +509,52 @@ export default function MarioConsoleSection() {
       hopNextPhase = next;
       facing = dir;
       phaseTimer = 0;
+    };
+
+    const evalHopMotion = (tSec: number) => {
+      if (tSec < HOP_ANTICIPATION) {
+        // 1. Anticipation: frame 9 for 80ms at takeoff position
+        return {
+          x: hopX0,
+          y: hopY0,
+          frame: 9,
+          isComplete: false,
+        };
+      }
+      if (tSec < HOP_ANTICIPATION + HOP_FLIGHT_TIME) {
+        // 2. Parabolic flight arc
+        const tFlight = (tSec - HOP_ANTICIPATION) / HOP_FLIGHT_TIME;
+        const p = Math.max(0, Math.min(1, tFlight));
+        const x = hopX0 + (hopX1 - hopX0) * p;
+        let y: number;
+        if (p < 0.5) {
+          const u = p / 0.5;
+          const easeOut = 1 - (1 - u) * (1 - u);
+          y = hopY0 + (hopApexY - hopY0) * easeOut;
+        } else {
+          const v = (p - 0.5) / 0.5;
+          const easeIn = v * v;
+          y = hopApexY + (hopY1 - hopApexY) * easeIn;
+        }
+        const frame = p < 0.52 ? 7 : 8;
+        return { x, y, frame, isComplete: false };
+      }
+      if (tSec < TOTAL_HOP_TIME) {
+        // 3. Landing squash: breathe frame 1 for 80ms at landing destination
+        return {
+          x: hopX1,
+          y: hopY1,
+          frame: 1,
+          isComplete: false,
+        };
+      }
+      // 4. Completed full hop lifecycle
+      return {
+        x: hopX1,
+        y: hopY1,
+        frame: 1,
+        isComplete: true,
+      };
     };
 
     const spawnSmokePuff = (x: number, y: number, vx = 0, vy = -18, duration = 0.5) => {
@@ -898,8 +956,8 @@ export default function MarioConsoleSection() {
     // Fixed 60 Hz simulation step (dt = 1/60s)
     const stepPhysics = (dt: number) => {
       simTime += dt;
-      const prevHeroX = heroX;
-      const prevHeroY = heroY;
+      prevHeroX = heroX;
+      prevHeroY = heroY;
 
       // 1. Update Clouds
       if (!prefersReducedMotion) {
@@ -1490,7 +1548,14 @@ export default function MarioConsoleSection() {
         heroVy = Math.min(TERMINAL_VEL_Y, heroVy + GRAVITY * dt);
         const upSpeed = heroVy < 0 ? -heroVy : 0;
         const res = moveHeroWithCollisions(heroVx * dt, heroVy * dt, upSpeed);
-        heroFrame = heroVy < 0 ? 7 : 8;
+        // Fall frame ONLY while vy > 40 per Section 5.4 line 199
+        if (heroVy < -40) {
+          heroFrame = 7;
+        } else if (heroVy > 40) {
+          heroFrame = 8;
+        } else {
+          heroFrame = 0;
+        }
 
         if (res.hitWall) heroVx = 0;
         if (res.hitCeiling && heroVy < 0) heroVy = 0;
@@ -1498,6 +1563,16 @@ export default function MarioConsoleSection() {
         if (res.landedOn) {
           heroVx = 0;
           heroVy = 0;
+          routePhase = "DROP_LAND_SQUASH";
+          phaseTimer = 0;
+          heroFrame = 1; // landing squash (breathe frame 1 for 80ms)
+        }
+      } else if (routePhase === "DROP_LAND_SQUASH") {
+        activeBubble = "none";
+        heroFrame = 1; // landing squash for 80ms
+        phaseTimer += dt;
+        if (phaseTimer >= 0.08) {
+          phaseTimer = 0;
           heroFrame = 0;
           if (rainbowState === "RAINBOW") {
             resumeFromCurrentSurface();
@@ -1525,23 +1600,6 @@ export default function MarioConsoleSection() {
       } else {
         // AUTONOMOUS ROUTE (Steps 1..8)
         phaseTimer += dt;
-
-        const evalHopPosition = (tNorm: number) => {
-          const t = Math.max(0, Math.min(1, tNorm));
-          const x = hopX0 + (hopX1 - hopX0) * t;
-          let y: number;
-          if (t < 0.5) {
-            const u = t / 0.5;
-            const easeOut = 1 - (1 - u) * (1 - u);
-            y = hopY0 + (hopApexY - hopY0) * easeOut;
-          } else {
-            const v = (t - 0.5) / 0.5;
-            const easeIn = v * v;
-            y = hopApexY + (hopY1 - hopApexY) * easeIn;
-          }
-          const frame = t < 0.16 ? 9 : t < 0.52 ? 7 : 8;
-          return { x, y, frame };
-        };
 
         switch (routePhase) {
           case "STEP1_LEFT_IDLE": {
@@ -1596,11 +1654,11 @@ export default function MarioConsoleSection() {
 
           case "STEP2_HOP_TO_P1": {
             activeBubble = "none";
-            const { x, y, frame } = evalHopPosition(phaseTimer / HOP_DURATION);
+            const { x, y, frame, isComplete } = evalHopMotion(phaseTimer);
             heroX = x;
             heroY = y;
             heroFrame = frame;
-            if (phaseTimer >= HOP_DURATION) {
+            if (isComplete) {
               heroX = PIPE1_CENTER_X;
               heroY = PIPE1_SURF_Y;
               phaseTimer = 0;
@@ -1682,11 +1740,11 @@ export default function MarioConsoleSection() {
           case "STEP4_HOP_P1_TO_P2": {
             plantRouteLock = true;
             activeBubble = "none";
-            const { x, y, frame } = evalHopPosition(phaseTimer / HOP_DURATION);
+            const { x, y, frame, isComplete } = evalHopMotion(phaseTimer);
             heroX = x;
             heroY = y;
             heroFrame = frame;
-            if (phaseTimer >= HOP_DURATION) {
+            if (isComplete) {
               heroX = PIPE2_CENTER_X;
               heroY = PIPE2_SURF_Y;
               routePhase = "STEP4_P2_BEAT";
@@ -1720,11 +1778,11 @@ export default function MarioConsoleSection() {
           case "STEP4_HOP_P2_TO_P3": {
             plantRouteLock = true;
             activeBubble = "none";
-            const { x, y, frame } = evalHopPosition(phaseTimer / HOP_DURATION);
+            const { x, y, frame, isComplete } = evalHopMotion(phaseTimer);
             heroX = x;
             heroY = y;
             heroFrame = frame;
-            if (phaseTimer >= HOP_DURATION) {
+            if (isComplete) {
               heroX = PIPE3_CENTER_X;
               heroY = PIPE3_SURF_Y;
               routePhase = "STEP5_P3_CONFUSED";
@@ -1794,11 +1852,11 @@ export default function MarioConsoleSection() {
           case "STEP6_HOP_P3_TO_P2": {
             plantRouteLock = true;
             activeBubble = "none";
-            const { x, y, frame } = evalHopPosition(phaseTimer / HOP_DURATION);
+            const { x, y, frame, isComplete } = evalHopMotion(phaseTimer);
             heroX = x;
             heroY = y;
             heroFrame = frame;
-            if (phaseTimer >= HOP_DURATION) {
+            if (isComplete) {
               heroX = PIPE2_CENTER_X;
               heroY = PIPE2_SURF_Y;
               routePhase = "STEP6_P2_BEAT";
@@ -1832,11 +1890,11 @@ export default function MarioConsoleSection() {
           case "STEP6_HOP_P2_TO_P1": {
             plantRouteLock = true;
             activeBubble = "none";
-            const { x, y, frame } = evalHopPosition(phaseTimer / HOP_DURATION);
+            const { x, y, frame, isComplete } = evalHopMotion(phaseTimer);
             heroX = x;
             heroY = y;
             heroFrame = frame;
-            if (phaseTimer >= HOP_DURATION) {
+            if (isComplete) {
               heroX = PIPE1_CENTER_X;
               heroY = PIPE1_SURF_Y;
               routePhase = "STEP6_P1_BEAT";
@@ -1869,11 +1927,11 @@ export default function MarioConsoleSection() {
 
           case "STEP6_HOP_P1_TO_GROUND": {
             activeBubble = "none";
-            const { x, y, frame } = evalHopPosition(phaseTimer / HOP_DURATION);
+            const { x, y, frame, isComplete } = evalHopMotion(phaseTimer);
             heroX = x;
             heroY = y;
             heroFrame = frame;
-            if (phaseTimer >= HOP_DURATION) {
+            if (isComplete) {
               heroX = PIPE1_GROUND_TAKEOFF_X;
               heroY = GROUND_Y;
               routePhase = "STEP6_GROUND_BEAT";
@@ -1970,25 +2028,38 @@ export default function MarioConsoleSection() {
           case "BLOCKS_EDGE_PAUSE": {
             heroX = blockTargetEdgeX;
             heroY = BLOCKS_Y;
-            heroFrame = 0;
             activeBubble = "none";
             facing = blockWalkDir;
-            // Stand at the very edge for 0.3s
+            // Stand at the very edge for 0.3s; lean for 100ms (hop frame 9)
+            if (phaseTimer < 0.2) {
+              heroFrame = 0;
+            } else {
+              heroFrame = 9; // lean for 100ms
+            }
+
             if (phaseTimer >= 0.3) {
-              // Step off or small forward hop away from platform and fall to ground
+              // Step off without teleport: smooth initial horizontal step
               heroVx = blockWalkDir * 35;
-              heroVy = -15; // small forward hop away from platform
-              heroX = blockTargetEdgeX + blockWalkDir * 10;
+              heroVy = 0; // begins falling with gravity easing in
+              heroX = blockTargetEdgeX; // NO TELEPORT!
               routePhase = "BLOCKS_STEP_OFF_FALL";
-              heroFrame = 8;
+              phaseTimer = 0;
+              heroFrame = 9;
             }
             break;
           }
 
           case "BLOCKS_STEP_OFF_FALL": {
             activeBubble = "none";
+            // Gravity easing in (terminal 420 px/s)
             heroVy = Math.min(TERMINAL_VEL_Y, heroVy + GRAVITY * dt);
-            heroFrame = heroVy < 0 ? 7 : 8;
+
+            // Use fall frame ONLY while vy > 40 per Section 5.4 line 199
+            if (heroVy > 40) {
+              heroFrame = 8;
+            } else {
+              heroFrame = 9;
+            }
 
             const res = moveHeroWithCollisions(heroVx * dt, heroVy * dt, 0);
             if (res.hitWall) heroVx = 0;
@@ -1997,10 +2068,21 @@ export default function MarioConsoleSection() {
             if (res.landedOn) {
               heroVx = 0;
               heroVy = 0;
-              heroFrame = 0;
+              heroY = GROUND_Y;
+              routePhase = "BLOCKS_LAND_SQUASH";
+              phaseTimer = 0;
+              heroFrame = 1; // landing squash (breathe frame 1 for 80ms)
+            }
+            break;
+          }
+
+          case "BLOCKS_LAND_SQUASH": {
+            heroY = GROUND_Y;
+            activeBubble = "none";
+            heroFrame = 1; // landing squash for 80ms
+            if (phaseTimer >= 0.08) {
               phaseTimer = 0;
               walkAnimTime = 0;
-              // Continue with step 2 or 7 by position
               if (heroX > PIPE1_GROUND_TAKEOFF_X + 2) {
                 routePhase = "STEP7_WALK_LEFT";
                 facing = -1;
@@ -2014,11 +2096,11 @@ export default function MarioConsoleSection() {
 
           case "HOP_BLOCKS_TO_GROUND": {
             activeBubble = "none";
-            const { x, y, frame } = evalHopPosition(phaseTimer / HOP_DURATION);
+            const { x, y, frame, isComplete } = evalHopMotion(phaseTimer);
             heroX = x;
             heroY = y;
             heroFrame = frame;
-            if (phaseTimer >= HOP_DURATION) {
+            if (isComplete) {
               heroX = hopX1;
               heroY = GROUND_Y;
               phaseTimer = 0;
@@ -2162,10 +2244,14 @@ export default function MarioConsoleSection() {
       }
     };
 
-    // Render world onto native (Wn x 216) canvas
-    const renderScene = () => {
+    // Render world onto native (Wn x 216) canvas with render interpolation
+    const renderScene = (interpAlpha = 1) => {
       ctx.imageSmoothingEnabled = false;
       ctx.clearRect(0, 0, wn, WORLD_H);
+
+      const alpha = Math.max(0, Math.min(1, interpAlpha));
+      const renderHeroX = prevHeroX + (heroX - prevHeroX) * alpha;
+      const renderHeroY = prevHeroY + (heroY - prevHeroY) * alpha;
 
       // 1. Stepped Sky Bands (#5C94FC to #A6C8FF)
       const skyBands = [
@@ -2490,8 +2576,8 @@ export default function MarioConsoleSection() {
           const blinkOn = Math.floor(rainbowTimer * 20) % 2 === 0;
           ctx.globalAlpha = blinkOn ? 0.25 : 1.0;
         }
-        const drawX = Math.round(heroX);
-        const drawY = Math.round(heroY - HERO_FEET_Y);
+        const drawX = Math.round(renderHeroX);
+        const drawY = Math.round(renderHeroY - HERO_FEET_Y);
         ctx.translate(drawX, drawY);
         ctx.scale(facing, 1);
 
@@ -2517,8 +2603,8 @@ export default function MarioConsoleSection() {
         const bImg = activeBubble === "question" ? images.bubbleQ : images.bubbleEx;
         if (bImg?.complete && bImg.naturalWidth > 0) {
           const bob = Math.round(Math.sin(simTime * 6) * 2);
-          const bx = Math.round(heroX + facing * 10 - 6);
-          const by = Math.round(heroY - 42 - 8 - 15 + bob);
+          const bx = Math.round(renderHeroX + facing * 10 - 6);
+          const by = Math.round(renderHeroY - 42 - 8 - 15 + bob);
           ctx.drawImage(bImg, bx, Math.max(2, by), 12, 15);
         }
       }
@@ -2643,8 +2729,8 @@ export default function MarioConsoleSection() {
         routePhase !== "EATEN_HIDDEN";
       const handleW = Math.max(44, 36 * scaleK);
       const handleH = Math.max(44, 50 * scaleK);
-      const heroScreenCenterX = (heroX - viewLeft) * scaleK;
-      const heroScreenCenterY = (heroY - 24) * scaleK;
+      const heroScreenCenterX = (renderHeroX - viewLeft) * scaleK;
+      const heroScreenCenterY = (renderHeroY - 24) * scaleK;
       const hLeft = Math.round(heroScreenCenterX - handleW / 2);
       const hTop = Math.round(heroScreenCenterY - handleH / 2);
 
@@ -2771,9 +2857,9 @@ export default function MarioConsoleSection() {
       if (surf && heroVy >= 0) {
         heroVx = 0;
         heroVy = 0;
-        heroFrame = 0;
-        routePhase = "WAIT_RESUME";
-        waitResumeTimer = 0;
+        routePhase = "DROP_LAND_SQUASH";
+        phaseTimer = 0;
+        heroFrame = 1; // landing squash
       } else {
         routePhase = "AIR_FALL";
       }
@@ -2864,18 +2950,23 @@ export default function MarioConsoleSection() {
         rafId = null;
         return;
       }
-      const frameDt = Math.min(0.1, Math.max(0, (now - lastNow) / 1000));
+      // PERFORMANCE RULE (5): Clamped frame delta (max 50ms) so tab switches or GC pauses never cause jumps
+      const frameDt = Math.min(0.05, Math.max(0, (now - lastNow) / 1000));
       lastNow = now;
       accumulator += frameDt;
 
       let subSteps = 0;
-      while (accumulator >= FIXED_DT && subSteps < 8) {
+      while (accumulator >= FIXED_DT && subSteps < 4) {
         stepPhysics(FIXED_DT);
         accumulator -= FIXED_DT;
         subSteps += 1;
       }
+      if (accumulator >= FIXED_DT) {
+        accumulator = 0;
+      }
 
-      renderScene();
+      // Render interpolation using normalized accumulator
+      renderScene(accumulator / FIXED_DT);
       rafId = requestAnimationFrame(tick);
     };
 

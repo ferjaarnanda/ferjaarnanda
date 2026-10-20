@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import gsap from "gsap";
 import levelData from "../../public/environment/level-data.json";
-import { playCoinKling, playBoomSfx } from "@/lib/sfx";
+import { playCoinKling, playBoomSfx, initAudio } from "@/lib/sfx";
 
 // (3) Replay every page load and refresh; no sessionStorage flag
 // Afterwards the page must always be at the very top:
@@ -81,12 +81,14 @@ const INITIAL_CLOUDS: CloudInstance[] = [
 
 export default function LoadingScreen() {
   const [visible, setVisible] = useState<boolean>(false);
-  const [progressPct, setProgressPct] = useState<number>(0);
   const [isWiping, setIsWiping] = useState<boolean>(false);
   const [reducedFadeOut, setReducedFadeOut] = useState<boolean>(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const progressBarFillRef = useRef<HTMLDivElement>(null);
+  const progressBarRoleRef = useRef<HTMLDivElement>(null);
+  const wipeTriggeredRef = useRef<boolean>(false);
   const tlRef = useRef<gsap.core.Timeline | null>(null);
   const finishedRef = useRef<boolean>(false);
 
@@ -113,8 +115,11 @@ export default function LoadingScreen() {
     const tl = tlRef.current;
     if (tl) {
       if (tl.time() < 11.8) {
+        wipeTriggeredRef.current = true;
         setIsWiping(true);
-        setProgressPct(100);
+        if (progressBarFillRef.current) {
+          progressBarFillRef.current.style.width = "100%";
+        }
         tl.seek(11.8, false);
         tl.play();
       }
@@ -148,7 +153,10 @@ export default function LoadingScreen() {
     let rafId = 0;
     let isCancelled = false;
 
-    // Preload images
+    // Startup audio initialization (AudioContext + pre-rendered AudioBuffers)
+    initAudio();
+
+    // Preload & DECODE all critical images before starting
     const imageMap = new Map<string, HTMLImageElement>();
     let loadedCount = 0;
     const totalAssets = CRITICAL_ASSETS.length;
@@ -158,7 +166,12 @@ export default function LoadingScreen() {
       new Promise<void>((resolve) => {
         const img = new Image();
         img.decoding = "async";
-        img.onload = () => {
+        img.onload = async () => {
+          try {
+            if ("decode" in img) {
+              await img.decode();
+            }
+          } catch {}
           imageMap.set(src, img);
           loadedCount++;
           if (loadedCount >= totalAssets) allAssetsLoaded = true;
@@ -172,39 +185,42 @@ export default function LoadingScreen() {
         img.src = src;
       });
 
-    // Critical subset needed before frame 0 starts
-    const firstCritical = [
-      "/character/devj-sheet-nobubble.png",
-      "/environment/level-loading-ground.png",
-      "/environment/level-loading-decor.png",
-      "/environment/bg-hills-far.png",
-      "/environment/bg-hills-mid.png",
-      "/environment/tile-grass.png",
-      "/environment/tile-brick.png",
-      "/environment/minicoin-sheet.png",
-      "/coins/spin24-rainbow.png",
-      "/environment/sparkle-1.png",
-      "/environment/sparkle-2.png",
-      "/environment/sparkle-3.png",
-      "/environment/sparkle-4.png",
-    ];
-
-    CRITICAL_ASSETS.forEach((src) => loadSingleImage(src));
-    const criticalPromise = Promise.all(
-      firstCritical.map((src) => loadSingleImage(src))
+    // Wait for ALL assets and fonts so nothing decodes mid-animation
+    const assetsPromise = Promise.all(
+      CRITICAL_ASSETS.map((src) => loadSingleImage(src))
     );
     const fontsPromise =
       document.fonts && document.fonts.ready
         ? document.fonts.ready
         : Promise.resolve();
 
-    Promise.all([criticalPromise, fontsPromise]).then(() => {
+    Promise.all([assetsPromise, fontsPromise]).then(() => {
       if (isCancelled) return;
 
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+
+      // Warm up: draw one frame of every sprite and effect offscreen
+      // so GPU textures and shaders are fully uploaded before timeline starts
+      const warmupCanvas = document.createElement("canvas");
+      warmupCanvas.width = 128;
+      warmupCanvas.height = 128;
+      const wCtx = warmupCanvas.getContext("2d");
+      if (wCtx) {
+        imageMap.forEach((img) => {
+          try {
+            wCtx.drawImage(
+              img,
+              0,
+              0,
+              Math.min(128, img.naturalWidth || 32),
+              Math.min(128, img.naturalHeight || 32)
+            );
+          } catch {}
+        });
+      }
 
       // Prepare offscreen decor canvas (level-loading-decor.png now contains NO coins;
       // only clear the static flag at x=1660 so waving flag-1..4 replaces it cleanly)
@@ -315,7 +331,9 @@ export default function LoadingScreen() {
         if (spinRainbow) {
           ctx.drawImage(spinRainbow, 0, 0, 35, 35, 140, stripTop + 58, 70, 70);
         }
-        setProgressPct(100);
+        if (progressBarFillRef.current) {
+          progressBarFillRef.current.style.width = "100%";
+        }
 
         const t1 = setTimeout(() => {
           setReducedFadeOut(true);
@@ -379,12 +397,22 @@ export default function LoadingScreen() {
       }
 
       // Build GSAP Master Timeline (13.0s total)
+      // PERFORMANCE RULE (3): No React state updates per frame, no re-renders inside the loop
       const tl = gsap.timeline({
         onUpdate: () => {
           const t = tl.time();
           const pct = Math.min(100, Math.max(0, (t / 11.8) * 100));
-          setProgressPct(pct);
-          if (t >= 11.8) {
+          if (progressBarFillRef.current) {
+            progressBarFillRef.current.style.width = `${pct}%`;
+          }
+          if (progressBarRoleRef.current) {
+            progressBarRoleRef.current.setAttribute(
+              "aria-valuenow",
+              String(Math.round(pct))
+            );
+          }
+          if (t >= 11.8 && !wipeTriggeredRef.current) {
+            wipeTriggeredRef.current = true;
             setIsWiping(true);
           }
         },
@@ -1062,16 +1090,18 @@ export default function LoadingScreen() {
 
       {/* Thin pixel progress bar (6px high, red #E52521 on translucent dark) pinned to bottom edge */}
       <div
+        ref={progressBarRoleRef}
         className="absolute bottom-0 left-0 right-0 z-20 h-[6px] bg-[#2B1B0E]/45 overflow-hidden pointer-events-none"
         role="progressbar"
-        aria-valuenow={Math.round(progressPct)}
+        aria-valuenow={0}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-label="Loading progress"
       >
         <div
+          ref={progressBarFillRef}
           className="h-full bg-[#E52521]"
-          style={{ width: `${progressPct}%` }}
+          style={{ width: "0%" }}
         />
       </div>
     </div>
