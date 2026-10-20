@@ -167,6 +167,9 @@ type RoutePhase =
   | "STEP7_WALK_LEFT"
   | "STEP7_LEFT_CONFUSED"
   | "STEP8_LEFT_BEAT"
+  | "BLOCKS_WALK_TO_EDGE"
+  | "BLOCKS_EDGE_PAUSE"
+  | "BLOCKS_STEP_OFF_FALL"
   | "HOP_BLOCKS_TO_GROUND"
   | "DRAGGING"
   | "AIR_FALL"
@@ -337,7 +340,8 @@ export default function MarioConsoleSection() {
       pipeMedium: "/environment/pipe-medium.png",
       pipeTall: "/environment/pipe-tall.png",
       plantHeadSheet: `/environment/${plantRigData.head.file}`,
-      stemBead: "/environment/stem-bead.png",
+      stemBeadOutline: "/environment/stem-bead-outline.png",
+      stemBeadFill: "/environment/stem-bead-fill.png",
       plantLeaves: "/environment/plant-leaves.png",
       fxStar: "/environment/fx-star.png",
       fxBump: "/environment/fx-bump.png",
@@ -442,6 +446,8 @@ export default function MarioConsoleSection() {
     let coinY = BLOCKS_Y;
     let coinSpinTime = 0;
     let collectCount = 0;
+    let blockTargetEdgeX = 216;
+    let blockWalkDir: 1 | -1 = -1;
 
     // Rainbow mode & blink state
     let rainbowState: RainbowState = "NONE";
@@ -733,19 +739,21 @@ export default function MarioConsoleSection() {
         heroFrame = 11;
         activeBubble = "question";
       } else if (surf === "blocks") {
-        const targetGroundX = Math.max(
-          farLeftWalkX,
-          Math.min(PIPE1_GROUND_TAKEOFF_X, heroX + (resumeLastDir >= 0 ? 28 : -28))
-        );
-        startHop(
-          heroX,
-          BLOCKS_Y,
-          targetGroundX,
-          GROUND_Y,
-          "HOP_BLOCKS_TO_GROUND",
-          resumeLastDir
-        );
-        routePhase = "HOP_BLOCKS_TO_GROUND";
+        // (4) PLATFORM STEP-OFF: compare x with both ends (216 and 296), pick closer one
+        const distToLeft = Math.abs(heroX - 216);
+        const distToRight = Math.abs(heroX - 296);
+        if (distToLeft <= distToRight) {
+          blockTargetEdgeX = 216;
+          blockWalkDir = -1;
+          facing = -1;
+        } else {
+          blockTargetEdgeX = 296;
+          blockWalkDir = 1;
+          facing = 1;
+        }
+        routePhase = "BLOCKS_WALK_TO_EDGE";
+        phaseTimer = 0;
+        walkAnimTime = 0;
       } else {
         heroY = GROUND_Y;
         if (heroX > PIPE1_GROUND_TAKEOFF_X + 2) {
@@ -1937,6 +1945,73 @@ export default function MarioConsoleSection() {
             break;
           }
 
+          case "BLOCKS_WALK_TO_EDGE": {
+            heroY = BLOCKS_Y;
+            facing = blockWalkDir;
+            activeBubble = "none";
+            heroX += blockWalkDir * WALK_SPEED * dt;
+            walkAnimTime += dt;
+            heroFrame = WALK_FRAMES[Math.floor(walkAnimTime * WALK_FPS) % 4];
+
+            const reached =
+              blockWalkDir === -1
+                ? heroX <= blockTargetEdgeX
+                : heroX >= blockTargetEdgeX;
+
+            if (reached) {
+              heroX = blockTargetEdgeX;
+              heroFrame = 0;
+              routePhase = "BLOCKS_EDGE_PAUSE";
+              phaseTimer = 0;
+            }
+            break;
+          }
+
+          case "BLOCKS_EDGE_PAUSE": {
+            heroX = blockTargetEdgeX;
+            heroY = BLOCKS_Y;
+            heroFrame = 0;
+            activeBubble = "none";
+            facing = blockWalkDir;
+            // Stand at the very edge for 0.3s
+            if (phaseTimer >= 0.3) {
+              // Step off or small forward hop away from platform and fall to ground
+              heroVx = blockWalkDir * 35;
+              heroVy = -15; // small forward hop away from platform
+              heroX = blockTargetEdgeX + blockWalkDir * 10;
+              routePhase = "BLOCKS_STEP_OFF_FALL";
+              heroFrame = 8;
+            }
+            break;
+          }
+
+          case "BLOCKS_STEP_OFF_FALL": {
+            activeBubble = "none";
+            heroVy = Math.min(TERMINAL_VEL_Y, heroVy + GRAVITY * dt);
+            heroFrame = heroVy < 0 ? 7 : 8;
+
+            const res = moveHeroWithCollisions(heroVx * dt, heroVy * dt, 0);
+            if (res.hitWall) heroVx = 0;
+            if (res.hitCeiling && heroVy < 0) heroVy = 0;
+
+            if (res.landedOn) {
+              heroVx = 0;
+              heroVy = 0;
+              heroFrame = 0;
+              phaseTimer = 0;
+              walkAnimTime = 0;
+              // Continue with step 2 or 7 by position
+              if (heroX > PIPE1_GROUND_TAKEOFF_X + 2) {
+                routePhase = "STEP7_WALK_LEFT";
+                facing = -1;
+              } else {
+                routePhase = "STEP2_WALK_RIGHT";
+                facing = 1;
+              }
+            }
+            break;
+          }
+
           case "HOP_BLOCKS_TO_GROUND": {
             activeBubble = "none";
             const { x, y, frame } = evalHopPosition(phaseTimer / HOP_DURATION);
@@ -2220,13 +2295,22 @@ export default function MarioConsoleSection() {
           )
         );
 
-        // 6a. Draw plant-leaves.png (32x18) behind the pipe at x=407, y=108 when emerged
-        if (images.plantLeaves?.complete && images.plantLeaves.naturalWidth > 0) {
+        // 6a. Draw plant-leaves.png (32x18) behind the neck at x=407, y=108 when emerged
+        // Uses new leaves-only sprite (no bulb, no stem) with no remnants
+        if (
+          images.plantLeaves?.complete &&
+          images.plantLeaves.naturalWidth > 0 &&
+          emergeFactor > 0.05
+        ) {
           const leavesY = Math.round(108 + (1 - emergeFactor) * 28);
           ctx.drawImage(images.plantLeaves, PLANT_CFG.x, leavesY, 32, 18);
         }
 
-        // 6b. Draw NECK: chain of stem-bead.png (10x10) every 4px along a quadratic curve from P0 to head pivot
+        // 6b. Draw NECK: chain of stem beads every 3px along quadratic curve from P0 to head pivot
+        // TWO-PASS rendering:
+        // Pass 1: stem-bead-outline.png (10x10) for EVERY bead along the curve
+        // Pass 2: stem-bead-fill.png (8x8) for EVERY bead on top
+        // Never draw a bead's outline over a previous bead's fill (that creates black stripes)
         const p2x = plantHeadX;
         const p2y = plantHeadY + plantSquashY;
         const dx = p2x - P0_X;
@@ -2239,17 +2323,46 @@ export default function MarioConsoleSection() {
         const p1x = (P0_X + p2x) * 0.5 + slightBendX;
         const p1y = (P0_Y + p2y) * 0.5 + sidewaysDroop;
 
-        if (images.stemBead?.complete && images.stemBead.naturalWidth > 0 && dist > 3) {
-          // Sample quadratic Bezier curve every 4px
+        if (
+          images.stemBeadOutline?.complete &&
+          images.stemBeadOutline.naturalWidth > 0 &&
+          images.stemBeadFill?.complete &&
+          images.stemBeadFill.naturalWidth > 0 &&
+          dist > 3
+        ) {
+          // Sample quadratic Bezier curve every 3px
           const approxLen =
             Math.hypot(p1x - P0_X, p1y - P0_Y) + Math.hypot(p2x - p1x, p2y - p1y);
-          const numBeads = Math.max(2, Math.ceil(approxLen / 4));
+          const numBeads = Math.max(2, Math.ceil(approxLen / 3));
+
+          // Pass 1: Outline (10x10, center at bx-5, by-5)
           for (let b = 0; b <= numBeads; b++) {
             const t = b / numBeads;
             const inv = 1 - t;
             const bx = inv * inv * P0_X + 2 * inv * t * p1x + t * t * p2x;
             const by = inv * inv * P0_Y + 2 * inv * t * p1y + t * t * p2y;
-            ctx.drawImage(images.stemBead, Math.round(bx - 5), Math.round(by - 5), 10, 10);
+            ctx.drawImage(
+              images.stemBeadOutline,
+              Math.round(bx - 5),
+              Math.round(by - 5),
+              10,
+              10
+            );
+          }
+
+          // Pass 2: Fill (8x8, center at bx-4, by-4)
+          for (let b = 0; b <= numBeads; b++) {
+            const t = b / numBeads;
+            const inv = 1 - t;
+            const bx = inv * inv * P0_X + 2 * inv * t * p1x + t * t * p2x;
+            const by = inv * inv * P0_Y + 2 * inv * t * p1y + t * t * p2y;
+            ctx.drawImage(
+              images.stemBeadFill,
+              Math.round(bx - 4),
+              Math.round(by - 4),
+              8,
+              8
+            );
           }
         }
 
@@ -2585,6 +2698,8 @@ export default function MarioConsoleSection() {
       frameEl.dataset.totalBooms = String(totalBooms);
       frameEl.dataset.bumpCount = String(bumpCount);
       frameEl.dataset.collectCount = String(collectCount);
+      frameEl.dataset.solidPenetration = String(solidPenetrationCount);
+      frameEl.dataset.blockTargetEdgeX = String(blockTargetEdgeX);
       frameEl.dataset.loopCount = String(loopCount);
       frameEl.dataset.wn = String(wn);
       frameEl.dataset.scaleK = String(scaleK);

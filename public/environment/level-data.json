@@ -95,7 +95,20 @@
     }
    ],
    "note": "level-loading-decor.png contains NO coins; draw these dynamically so each can be collected and removed"
-  }
+  },
+  "floatingBlocks": [
+   {
+    "x": 150,
+    "y": 104,
+    "pattern": "BQB"
+   },
+   {
+    "x": 690,
+    "y": 88,
+    "pattern": "BBQBB",
+    "note": "ends at x=770, clear of the pit-2 jump (takeoff 520, landing 632) and of the pit-3 takeoff (808)"
+   }
+  ]
  },
  "jenis": {
   "width": 640,

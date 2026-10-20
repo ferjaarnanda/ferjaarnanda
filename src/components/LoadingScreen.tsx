@@ -5,7 +5,9 @@ import gsap from "gsap";
 import levelData from "../../public/environment/level-data.json";
 import { playCoinKling, playBoomSfx } from "@/lib/sfx";
 
-const SESSION_KEY = "ferja_intro_seen_v1";
+// (3) Replay every page load and refresh; no sessionStorage flag
+// Afterwards the page must always be at the very top:
+// set history.scrollRestoration = 'manual', strip any #hash, window.scrollTo(0,0) before and after
 
 const CRITICAL_ASSETS = [
   "/character/devj-sheet-nobubble.png",
@@ -92,10 +94,10 @@ export default function LoadingScreen() {
   const finishLoader = useCallback(() => {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    try {
-      sessionStorage.setItem(SESSION_KEY, "1");
-    } catch {
-      // ignore storage errors
+    
+    // Page must always be at the very top after the loader finishes
+    if (typeof window !== "undefined") {
+      window.scrollTo(0, 0);
     }
     document.body.style.overflow = "";
     if (tlRef.current) {
@@ -124,20 +126,17 @@ export default function LoadingScreen() {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    const params = new URLSearchParams(window.location.search);
-    const forceIntro = params.get("intro") === "1";
-
-    let alreadySeen = false;
-    try {
-      alreadySeen = sessionStorage.getItem(SESSION_KEY) === "1";
-    } catch {
-      alreadySeen = false;
+    // (3) REPLAY & SCROLL RESET:
+    // Play on EVERY page load and refresh (no sessionStorage flag)
+    // Page must always start at the very top:
+    // set history.scrollRestoration = 'manual', strip any #hash, window.scrollTo(0,0) before and after
+    if ("scrollRestoration" in history) {
+      history.scrollRestoration = "manual";
     }
-
-    if (alreadySeen && !forceIntro) {
-      setVisible(false);
-      return;
+    if (window.location.hash) {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
     }
+    window.scrollTo(0, 0);
 
     setVisible(true);
     document.body.style.overflow = "hidden";
