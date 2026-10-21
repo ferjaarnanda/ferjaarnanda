@@ -29,9 +29,9 @@ const PIPE1_CENTER_X = PIPE1.x + PIPE_W / 2; // 383
 const PIPE2_CENTER_X = PIPE2.x + PIPE_W / 2; // 423
 const PIPE3_CENTER_X = PIPE3.x + PIPE_W / 2; // 463
 
-const PIPE1_SURF_Y = PIPE1.top + 1; // 139
-const PIPE2_SURF_Y = PIPE2.top + 1; // 123
-const PIPE3_SURF_Y = PIPE3.top + 1; // 107
+const PIPE1_SURF_Y = PIPE1.top; // 138
+const PIPE2_SURF_Y = PIPE2.top; // 122
+const PIPE3_SURF_Y = PIPE3.top; // 106
 
 const PLANT_CFG = CONSOLE_DATA.plant; // { x: 407, hiddenTop: 130, raisedTop: 70, clipY: 134 }
 const HEAD_CELL = plantRigData.head.cell; // 88
@@ -284,6 +284,7 @@ export default function MarioConsoleSection() {
     wn: 400,
   });
   const [muted, setMuted] = useState<boolean>(false);
+  const [announcedScore, setAnnouncedScore] = useState<number>(0);
 
   useEffect(() => {
     setMuted(isSfxMuted());
@@ -324,12 +325,25 @@ export default function MarioConsoleSection() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+    const dprInt = Math.max(1, Math.floor(dpr));
     const scaleK = layoutState.k;
+    const S = scaleK * dprInt;
     const wn = layoutState.wn;
     const viewLeft = WORLD_W - wn;
     const minHeroX = Math.max(HITBOX_HALF_W, viewLeft + HITBOX_HALF_W);
     const maxHeroX = WORLD_W - HITBOX_HALF_W;
     const farLeftWalkX = Math.max(minHeroX + 4, viewLeft + 28);
+
+    // Backing store = (Wn x 216) x S device pixels with S = K * max(1, floor(devicePixelRatio))
+    canvas.width = wn * S;
+    canvas.height = WORLD_H * S;
+    canvas.style.width = `${wn * scaleK}px`;
+    canvas.style.height = `${WORLD_H * scaleK}px`;
+
+    const toDevX = (wx: number) => Math.round((wx - viewLeft) * S);
+    const toDevY = (wy: number) => Math.round(wy * S);
+    const toDevDim = (dim: number) => Math.round(dim * S);
 
     // Load all image sprites (including new plant rig + fx sprites + meteor)
     const imgPaths: Record<string, string> = {
@@ -487,13 +501,46 @@ export default function MarioConsoleSection() {
     let stepOffCount = 0;
     let landSquashCount = 0;
 
-    // MOTION SMOOTHNESS (Section 5.4 line 199):
-    // Hops are analytic parabolas with a short anticipation (hop frame 9 for 80ms)
-    // and a landing squash (breathe frame 1 for 80ms).
+    // SCORE HUD (Section 5.4 line 236)
+    let coinScore = 0;
+    let hudPopTimer = 0;
+    let hudFlashYellowTimer = 0;
+    let hudRedFlashTimer = 0;
+    let hudShakeTimer = 0;
+
+    // MOTION SMOOTHNESS Item 2: Walk animation is distance-driven (advance 1 frame per 6 native px)
+    let walkDistanceAccum = 0;
+
+    // Test recording system (Item 5)
+    let isRecordingTicks = false;
+    interface RecordedTick {
+      tick: number;
+      x: number;
+      y: number;
+      dx: number;
+      dy: number;
+      vx: number;
+      vy: number;
+      frame: number;
+      frameTicks: number;
+      overlap: boolean;
+      phase: RoutePhase;
+    }
+    const recordedTicks: RecordedTick[] = [];
+    let tickCount = 0;
+    let lastRecordedFrame = 0;
+    let lastFrameTickCount = 0;
+    let isFirstFrameChange = true;
+    let justDropped = false;
+    let worstDxRecorded = 0;
+    let worstDyRecorded = 0;
+    let minFrameTicksRecorded = 999;
+    let solidOverlapCountRecorded = 0;
+
+    // MOTION SMOOTHNESS Item 3: HOPS analytic parabolas with clamp(0.35 + 0.004*dist + 0.004*hDiff, 0.45, 0.8)
+    let hopFlightDuration = 0.50;
     const HOP_ANTICIPATION = 0.08;
-    const HOP_FLIGHT_TIME = 0.50;
-    const HOP_LANDING_SQUASH = 0.08;
-    const TOTAL_HOP_TIME = HOP_ANTICIPATION + HOP_FLIGHT_TIME + HOP_LANDING_SQUASH;
+    const HOP_LANDING_SQUASH = 0.10;
 
     const startHop = (
       x0: number,
@@ -507,6 +554,9 @@ export default function MarioConsoleSection() {
       hopY0 = y0;
       hopX1 = x1;
       hopY1 = y1;
+      const dist = Math.abs(x1 - x0);
+      const hDiff = Math.abs(y1 - y0);
+      hopFlightDuration = Math.max(0.45, Math.min(0.8, 0.35 + 0.004 * dist + 0.004 * hDiff));
       hopApexY = Math.min(y0, y1) - 20;
       hopNextPhase = next;
       facing = dir;
@@ -514,8 +564,13 @@ export default function MarioConsoleSection() {
     };
 
     const evalHopMotion = (tSec: number) => {
-      if (tSec < HOP_ANTICIPATION) {
-        // 1. Anticipation: frame 9 for 80ms at takeoff position
+      const tAnticipate = HOP_ANTICIPATION;
+      const tFlight = hopFlightDuration;
+      const tSquash = HOP_LANDING_SQUASH;
+      const tTotal = tAnticipate + tFlight + tSquash;
+
+      if (tSec < tAnticipate) {
+        // 80ms anticipation (hop frame 9, crouch)
         return {
           x: hopX0,
           y: hopY0,
@@ -523,36 +578,41 @@ export default function MarioConsoleSection() {
           isComplete: false,
         };
       }
-      if (tSec < HOP_ANTICIPATION + HOP_FLIGHT_TIME) {
-        // 2. Parabolic flight arc
-        const tFlight = (tSec - HOP_ANTICIPATION) / HOP_FLIGHT_TIME;
-        const p = Math.max(0, Math.min(1, tFlight));
+      if (tSec < tAnticipate + tFlight) {
+        // Analytic parabola
+        const p = Math.max(0, Math.min(1, (tSec - tAnticipate) / tFlight));
         const x = hopX0 + (hopX1 - hopX0) * p;
-        let y: number;
-        if (p < 0.5) {
-          const u = p / 0.5;
-          const easeOut = 1 - (1 - u) * (1 - u);
-          y = hopY0 + (hopApexY - hopY0) * easeOut;
+        const baseline = hopY0 + (hopY1 - hopY0) * p;
+        const arc = -4 * (Math.max(hopY0, hopY1) - hopApexY) * p * (1 - p);
+        const y = p >= 0.5 ? Math.min(baseline + arc, hopY1) : baseline + arc;
+
+        // Rising frame 7 until apex, apex hold 60ms, fall frame 8 after apex
+        const halfHoldP = (0.06 / 2) / tFlight;
+        let frame: number;
+        if (p < 0.5 - halfHoldP) {
+          frame = 7;
+        } else if (p <= 0.5 + halfHoldP) {
+          frame = 7; // apex hold 60ms
         } else {
-          const v = (p - 0.5) / 0.5;
-          const easeIn = v * v;
-          y = hopApexY + (hopY1 - hopApexY) * easeIn;
+          frame = 8; // fall frame 8
         }
-        const frame = p < 0.52 ? 7 : 8;
         return { x, y, frame, isComplete: false };
       }
-      if (tSec < TOTAL_HOP_TIME) {
-        // 3. Landing squash: breathe frame 1 for 80ms at landing destination
+      if (tSec < tTotal) {
+        // Landing squash 100ms (breathe frame 1) carrying 30% speed
+        const dtSquash = tSec - (tAnticipate + tFlight);
+        const x = hopX1 + (facing * WALK_SPEED * 0.3) * dtSquash;
+        const y = hopY1;
         return {
-          x: hopX1,
-          y: hopY1,
+          x,
+          y,
           frame: 1,
           isComplete: false,
         };
       }
-      // 4. Completed full hop lifecycle
+      // Completed full hop lifecycle
       return {
-        x: hopX1,
+        x: hopX1 + (facing * WALK_SPEED * 0.3) * tSquash,
         y: hopY1,
         frame: 1,
         isComplete: true,
@@ -803,17 +863,19 @@ export default function MarioConsoleSection() {
         const distToLeft = Math.abs(heroX - 216);
         const distToRight = Math.abs(heroX - 296);
         if (distToLeft <= distToRight) {
-          blockTargetEdgeX = 216;
+          blockTargetEdgeX = 216 - HITBOX_HALF_W;
           blockWalkDir = -1;
           facing = -1;
         } else {
-          blockTargetEdgeX = 296;
+          blockTargetEdgeX = 296 + HITBOX_HALF_W;
           blockWalkDir = 1;
           facing = 1;
         }
         routePhase = "BLOCKS_WALK_TO_EDGE";
         phaseTimer = 0;
         walkAnimTime = 0;
+        walkDistanceAccum = 0;
+        heroFrame = 0;
       } else {
         heroY = GROUND_Y;
         if (heroX > PIPE1_GROUND_TAKEOFF_X + 2) {
@@ -852,6 +914,13 @@ export default function MarioConsoleSection() {
       coinState = "NONE";
       coinTimer = 0;
       collectCount += 1;
+
+      // SCORE HUD: +1 per rainbow coin (cap 99), pop 1.25 for 120ms, flash yellow
+      coinScore = Math.min(99, coinScore + 1);
+      hudPopTimer = 0.12;
+      hudFlashYellowTimer = 0.12;
+      setAnnouncedScore(coinScore);
+      frameEl.dataset.coinScore = String(coinScore);
 
       sparkles.push({ x: cx, y: cy, age: 0, duration: 0.4 });
       plusOnes.push({ x: cx - 9, y: coinY - 4, age: 0, duration: 0.65 });
@@ -1298,6 +1367,13 @@ export default function MarioConsoleSection() {
             activeBubble = "none";
             sparkles.push({ x: plantHeadX, y: plantHeadY, age: 0, duration: 0.32 });
             playCrunchSfx();
+
+            // SCORE HUD: drops to 00, flashes red, shakes +-2px for 250ms
+            coinScore = 0;
+            hudRedFlashTimer = 0.25;
+            hudShakeTimer = 0.25;
+            setAnnouncedScore(0);
+            frameEl.dataset.coinScore = "0";
           }
           break;
         }
@@ -1400,10 +1476,16 @@ export default function MarioConsoleSection() {
             heroHiddenByPlant = false;
             heroX = farLeftWalkX;
             heroY = GROUND_Y;
+            prevHeroX = heroX;
+            prevHeroY = heroY;
+            justDropped = true;
             heroVx = 0;
             heroVy = 0;
             facing = 1;
             heroFrame = 0;
+            lastRecordedFrame = 0;
+            lastFrameTickCount = tickCount;
+            isFirstFrameChange = true;
             activeBubble = "none";
             rainbowState = "BLINK";
             rainbowTimer = 0;
@@ -1576,7 +1658,8 @@ export default function MarioConsoleSection() {
         if (phaseTimer >= 0.08) {
           phaseTimer = 0;
           heroFrame = 0;
-          if (rainbowState === "RAINBOW") {
+          const surf = detectCurrentSurface();
+          if (surf === "blocks" || rainbowState === "RAINBOW") {
             resumeFromCurrentSurface();
           } else {
             routePhase = "WAIT_RESUME";
@@ -1628,14 +1711,16 @@ export default function MarioConsoleSection() {
             facing = 1;
             activeBubble = "none";
             heroY = GROUND_Y;
-            heroX += WALK_SPEED * dt;
-            walkAnimTime += dt;
-            heroFrame = WALK_FRAMES[Math.floor(walkAnimTime * WALK_FPS) % 4];
+            const step = WALK_SPEED * dt;
+            heroX += step;
             if (heroX >= PIPE1_GROUND_TAKEOFF_X) {
               heroX = PIPE1_GROUND_TAKEOFF_X;
               routePhase = "STEP2_PRE_HOP_P1";
               phaseTimer = 0;
               heroFrame = 0;
+            } else if (PIPE1_GROUND_TAKEOFF_X - heroX > 3) {
+              walkDistanceAccum += step;
+              heroFrame = WALK_FRAMES[Math.floor(walkDistanceAccum / 6) % 4];
             }
             break;
           }
@@ -1967,9 +2052,8 @@ export default function MarioConsoleSection() {
             facing = -1;
             activeBubble = "none";
             heroY = GROUND_Y;
-            heroX -= WALK_SPEED * dt;
-            walkAnimTime += dt;
-            heroFrame = WALK_FRAMES[Math.floor(walkAnimTime * WALK_FPS) % 4];
+            const step = WALK_SPEED * dt;
+            heroX -= step;
             if (heroX <= farLeftWalkX) {
               heroX = farLeftWalkX;
               routePhase = "STEP7_LEFT_CONFUSED";
@@ -1977,6 +2061,9 @@ export default function MarioConsoleSection() {
               facing = -1;
               heroFrame = 11;
               activeBubble = "question";
+            } else if (heroX - farLeftWalkX > 3) {
+              walkDistanceAccum += step;
+              heroFrame = WALK_FRAMES[Math.floor(walkDistanceAccum / 6) % 4];
             }
             break;
           }
@@ -2006,7 +2093,7 @@ export default function MarioConsoleSection() {
               loopCount += 1;
               routePhase = "STEP2_WALK_RIGHT";
               phaseTimer = 0;
-              walkAnimTime = 0;
+              walkDistanceAccum = 0;
             }
             break;
           }
@@ -2015,9 +2102,8 @@ export default function MarioConsoleSection() {
             heroY = BLOCKS_Y;
             facing = blockWalkDir;
             activeBubble = "none";
-            heroX += blockWalkDir * WALK_SPEED * dt;
-            walkAnimTime += dt;
-            heroFrame = WALK_FRAMES[Math.floor(walkAnimTime * WALK_FPS) % 4];
+            const step = WALK_SPEED * dt;
+            heroX += blockWalkDir * step;
 
             const reached =
               blockWalkDir === -1
@@ -2025,63 +2111,45 @@ export default function MarioConsoleSection() {
                 : heroX >= blockTargetEdgeX;
 
             if (reached) {
-              heroX = blockTargetEdgeX;
-              heroFrame = 0;
-              routePhase = "BLOCKS_EDGE_PAUSE";
-              phaseTimer = 0;
-            }
-            break;
-          }
-
-          case "BLOCKS_EDGE_PAUSE": {
-            heroX = blockTargetEdgeX;
-            heroY = BLOCKS_Y;
-            activeBubble = "none";
-            facing = blockWalkDir;
-            // Stand at the very edge for 0.3s; lean for 100ms (hop frame 9)
-            if (phaseTimer < 0.2) {
-              heroFrame = 0;
-            } else {
-              heroFrame = 9; // lean for 100ms
-            }
-
-            if (phaseTimer >= 0.3) {
-              // Step off without teleport: smooth initial horizontal step
-              stepOffCount += 1;
-              heroVx = blockWalkDir * 35;
-              heroVy = 0; // begins falling with gravity easing in
-              heroX = blockTargetEdgeX; // NO TELEPORT!
+              // 3b: keeps walking to nearest end WITHOUT stopping, walks off edge with small forward velocity (40 px/s),
+              // uses frame 9 for 60ms, then falls under gravity easing in (start vy = 0, 900 px/s^2, terminal 420)
+              heroX = blockTargetEdgeX; // NO TELEPORT
+              heroVx = blockWalkDir * 40;
+              heroVy = 0;
               routePhase = "BLOCKS_STEP_OFF_FALL";
               phaseTimer = 0;
               heroFrame = 9;
+              stepOffCount += 1;
+            } else if (Math.abs(heroX - blockTargetEdgeX) > 3) {
+              walkDistanceAccum += step;
+              heroFrame = WALK_FRAMES[Math.floor(walkDistanceAccum / 6) % 4];
             }
             break;
           }
 
           case "BLOCKS_STEP_OFF_FALL": {
             activeBubble = "none";
-            // Gravity easing in (terminal 420 px/s)
+            // Gravity easing in (start vy = 0, 900 px/s^2, terminal 420)
             heroVy = Math.min(TERMINAL_VEL_Y, heroVy + GRAVITY * dt);
 
-            // Use fall frame ONLY while vy > 40 per Section 5.4 line 199
-            if (heroVy > 40) {
-              heroFrame = 8;
+            if (phaseTimer < 0.06) {
+              heroFrame = 9; // uses frame 9 for 60ms
+            } else if (heroVy > 40) {
+              heroFrame = 8; // frame 8 while vy > 40
             } else {
               heroFrame = 9;
             }
 
-            const res = moveHeroWithCollisions(heroVx * dt, heroVy * dt, 0);
-            if (res.hitWall) heroVx = 0;
-            if (res.hitCeiling && heroVy < 0) heroVy = 0;
+            heroX += heroVx * dt;
+            heroY += heroVy * dt;
 
-            if (res.landedOn) {
+            if (heroY >= GROUND_Y) {
               landSquashCount += 1;
-              heroVx = 0;
-              heroVy = 0;
               heroY = GROUND_Y;
               routePhase = "BLOCKS_LAND_SQUASH";
               phaseTimer = 0;
-              heroFrame = 1; // landing squash (breathe frame 1 for 80ms)
+              heroFrame = 1; // landing squash (breathe frame 1 for 100ms)
+              heroVx = blockWalkDir * WALK_SPEED * 0.3; // carry 30% speed
             }
             break;
           }
@@ -2089,16 +2157,19 @@ export default function MarioConsoleSection() {
           case "BLOCKS_LAND_SQUASH": {
             heroY = GROUND_Y;
             activeBubble = "none";
-            heroFrame = 1; // landing squash for 80ms
-            if (phaseTimer >= 0.08) {
+            heroFrame = 1; // landing squash for 100ms
+            heroX += heroVx * dt;
+            if (phaseTimer >= 0.10) {
               phaseTimer = 0;
-              walkAnimTime = 0;
+              walkDistanceAccum = 0;
               if (heroX > PIPE1_GROUND_TAKEOFF_X + 2) {
                 routePhase = "STEP7_WALK_LEFT";
                 facing = -1;
+                heroVx = -WALK_SPEED;
               } else {
                 routePhase = "STEP2_WALK_RIGHT";
                 facing = 1;
+                heroVx = WALK_SPEED;
               }
             }
             break;
@@ -2252,12 +2323,92 @@ export default function MarioConsoleSection() {
       if (shakeTimer > 0) {
         shakeTimer = Math.max(0, shakeTimer - dt);
       }
+
+      // Decrement SCORE HUD timers
+      if (hudPopTimer > 0) hudPopTimer = Math.max(0, hudPopTimer - dt);
+      if (hudFlashYellowTimer > 0) hudFlashYellowTimer = Math.max(0, hudFlashYellowTimer - dt);
+      if (hudRedFlashTimer > 0) hudRedFlashTimer = Math.max(0, hudRedFlashTimer - dt);
+      if (hudShakeTimer > 0) hudShakeTimer = Math.max(0, hudShakeTimer - dt);
+
+      // Telemetry & Test Recording System (Item 5)
+      if (isRecordingTicks) {
+        tickCount++;
+        let dx = Math.abs(heroX - prevHeroX);
+        let dy = Math.abs(heroY - prevHeroY);
+        if (justDropped) {
+          dx = 0;
+          dy = 0;
+          justDropped = false;
+        }
+        const frameChanged = heroFrame !== lastRecordedFrame;
+        const frameTicks = tickCount - lastFrameTickCount;
+
+        const isTakeoffOrLandingException =
+          (lastRecordedFrame === 9 && heroFrame === 7) ||
+          (lastRecordedFrame === 8 && heroFrame === 1) ||
+          (lastRecordedFrame === 7 && heroFrame === 1) ||
+          (lastRecordedFrame === 9 && heroFrame === 1);
+
+        const isLunge =
+          plantPhase === "DEVOUR_LUNGE" ||
+          plantPhase === "DEVOUR_BITE" ||
+          plantPhase === "DEVOUR_PULLBACK" ||
+          plantPhase === "DEVOUR_CHEW" ||
+          plantPhase === "DEVOUR_METEOR" ||
+          plantPhase === "DEVOUR_EXPLODE" ||
+          routePhase === "EATEN_HIDDEN";
+
+        if (frameChanged) {
+          if (
+            !isFirstFrameChange &&
+            !isDragging &&
+            !isTakeoffOrLandingException &&
+            frameTicks < minFrameTicksRecorded
+          ) {
+            minFrameTicksRecorded = frameTicks;
+          }
+          isFirstFrameChange = false;
+          lastRecordedFrame = heroFrame;
+          lastFrameTickCount = tickCount;
+        }
+
+        if (!isDragging && !isLunge) {
+          if (dx > worstDxRecorded) worstDxRecorded = dx;
+        }
+        if (!isDragging) {
+          if (dy > worstDyRecorded) worstDyRecorded = dy;
+        }
+
+        // Check solid overlap
+        let overlap = false;
+        if (heroY > 168.1) overlap = true;
+        if (heroX + 8.9 > 366.1 && heroX - 8.9 < 399.9 && heroY > 138.1 && heroY - 42 < 168.0) overlap = true;
+        if (heroX + 8.9 > 406.1 && heroX - 8.9 < 439.9 && heroY > 122.1 && heroY - 42 < 168.0) overlap = true;
+        if (heroX + 8.9 > 446.1 && heroX - 8.9 < 479.9 && heroY > 106.1 && heroY - 42 < 168.0) overlap = true;
+        if (heroX + 8.9 > 216.1 && heroX - 8.9 < 295.9 && heroY > 88.1 && heroY - 41.9 < 103.9) overlap = true;
+
+        if (overlap) solidOverlapCountRecorded++;
+
+        recordedTicks.push({
+          tick: tickCount,
+          x: Math.round(heroX * 100) / 100,
+          y: Math.round(heroY * 100) / 100,
+          dx: Math.round(dx * 100) / 100,
+          dy: Math.round(dy * 100) / 100,
+          vx: Math.round(heroVx),
+          vy: Math.round(heroVy),
+          frame: heroFrame,
+          frameTicks: (frameChanged && !isFirstFrameChange && !isTakeoffOrLandingException) ? frameTicks : 0,
+          overlap,
+          phase: routePhase,
+        });
+      }
     };
 
-    // Render world onto native (Wn x 216) canvas with render interpolation
+    // Render world onto device resolution ((Wn x 216) x S) canvas with render interpolation
     const renderScene = (interpAlpha = 1) => {
       ctx.imageSmoothingEnabled = false;
-      ctx.clearRect(0, 0, wn, WORLD_H);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const alpha = Math.max(0, Math.min(1, interpAlpha));
       const renderHeroX = prevHeroX + (heroX - prevHeroX) * alpha;
@@ -2273,11 +2424,10 @@ export default function MarioConsoleSection() {
       ];
       for (let i = 0; i < skyBands.length; i++) {
         ctx.fillStyle = skyBands[i].color;
-        ctx.fillRect(0, skyBands[i].y, wn, skyBands[i].h);
+        const y0 = Math.round(skyBands[i].y * S);
+        const y1 = Math.round((skyBands[i].y + skyBands[i].h) * S);
+        ctx.fillRect(0, y0, wn * S, y1 - y0);
       }
-
-      ctx.save();
-      ctx.translate(-viewLeft, 0);
 
       // 2. Drifting Clouds
       const cloudMap: Record<CloudDef["key"], HTMLImageElement> = {
@@ -2290,27 +2440,27 @@ export default function MarioConsoleSection() {
         const c = clouds[i];
         const cImg = cloudMap[c.key];
         if (cImg && cImg.complete && cImg.naturalWidth > 0) {
-          ctx.drawImage(cImg, Math.round(c.x), Math.round(c.y), c.w, c.h);
+          ctx.drawImage(cImg, toDevX(c.x), toDevY(c.y), c.w * S, c.h * S);
         }
       }
 
       // 3. Distant Hills Parallax (bg-hills-far.png)
       if (images.hillsFar?.complete && images.hillsFar.naturalWidth > 0) {
         const hillsOffset = -Math.round((simTime * 1.5) % 768);
-        ctx.drawImage(images.hillsFar, hillsOffset, 0, 768, 216);
-        ctx.drawImage(images.hillsFar, hillsOffset + 768, 0, 768, 216);
+        ctx.drawImage(images.hillsFar, toDevX(hillsOffset), toDevY(0), 768 * S, 216 * S);
+        ctx.drawImage(images.hillsFar, toDevX(hillsOffset + 768), toDevY(0), 768 * S, 216 * S);
       }
 
       // 4. Console Back (480x216: ground, near hills, rainbow, grounded bushes)
       if (images.consoleBack?.complete && images.consoleBack.naturalWidth > 0) {
-        ctx.drawImage(images.consoleBack, 0, 0, WORLD_W, WORLD_H);
+        ctx.drawImage(images.consoleBack, toDevX(0), toDevY(0), 480 * S, 216 * S);
       }
 
       // 5. Block Row: Draw Rainbow Coin BEFORE blocks so it emerges from behind them
       if (coinState !== "NONE" && images.rainbowCoin?.complete && images.rainbowCoin.naturalWidth > 0) {
         ctx.save();
         ctx.beginPath();
-        ctx.rect(QBLOCK_X - 8, 0, 32, BLOCKS_BOTTOM_Y);
+        ctx.rect(toDevX(QBLOCK_X - 8), 0, 32 * S, toDevY(BLOCKS_BOTTOM_Y));
         ctx.clip();
         const coinFrame = Math.floor(coinSpinTime * 8) % 4;
         ctx.drawImage(
@@ -2319,10 +2469,10 @@ export default function MarioConsoleSection() {
           0,
           14,
           18,
-          QBLOCK_CENTER_X - 7,
-          Math.round(coinY),
-          14,
-          18
+          toDevX(QBLOCK_CENTER_X - 7),
+          toDevY(coinY),
+          14 * S,
+          18 * S
         );
         ctx.restore();
       }
@@ -2351,7 +2501,7 @@ export default function MarioConsoleSection() {
         }
 
         if (bImg?.complete && bImg.naturalWidth > 0) {
-          ctx.drawImage(bImg, bx, by, 16, 16);
+          ctx.drawImage(bImg, toDevX(bx), toDevY(by), 16 * S, 16 * S);
         }
       }
 
@@ -2368,13 +2518,13 @@ export default function MarioConsoleSection() {
         ctx.beginPath();
         // Clip at y=134 (pipe lip) inside the pipe column so the plant emerges from inside the pipe;
         // outside the pipe column allow down to groundY=168 so bottom-left lunges are never clipped in mid-air
-        ctx.rect(0, 0, WORLD_W, PLANT_CFG.clipY);
-        ctx.rect(0, PLANT_CFG.clipY, PIPE2.x - 8, GROUND_Y - PLANT_CFG.clipY);
+        ctx.rect(0, 0, wn * S, toDevY(PLANT_CFG.clipY));
+        ctx.rect(0, toDevY(PLANT_CFG.clipY), toDevX(PIPE2.x - 8), toDevY(GROUND_Y - PLANT_CFG.clipY));
         ctx.rect(
-          PIPE2.x + PIPE_W + 8,
-          PLANT_CFG.clipY,
-          WORLD_W - (PIPE2.x + PIPE_W + 8),
-          GROUND_Y - PLANT_CFG.clipY
+          toDevX(PIPE2.x + PIPE_W + 8),
+          toDevY(PLANT_CFG.clipY),
+          wn * S - toDevX(PIPE2.x + PIPE_W + 8),
+          toDevY(GROUND_Y - PLANT_CFG.clipY)
         );
         ctx.clip();
 
@@ -2392,21 +2542,16 @@ export default function MarioConsoleSection() {
         );
 
         // 6a. Draw plant-leaves.png (32x18) behind the neck at x=407, y=108 when emerged
-        // Uses new leaves-only sprite (no bulb, no stem) with no remnants
         if (
           images.plantLeaves?.complete &&
           images.plantLeaves.naturalWidth > 0 &&
           emergeFactor > 0.05
         ) {
           const leavesY = Math.round(108 + (1 - emergeFactor) * 28);
-          ctx.drawImage(images.plantLeaves, PLANT_CFG.x, leavesY, 32, 18);
+          ctx.drawImage(images.plantLeaves, toDevX(PLANT_CFG.x), toDevY(leavesY), 32 * S, 18 * S);
         }
 
         // 6b. Draw NECK: chain of stem beads every 3px along quadratic curve from P0 to head pivot
-        // TWO-PASS rendering:
-        // Pass 1: stem-bead-outline.png (10x10) for EVERY bead along the curve
-        // Pass 2: stem-bead-fill.png (8x8) for EVERY bead on top
-        // Never draw a bead's outline over a previous bead's fill (that creates black stripes)
         const p2x = plantHeadX;
         const p2y = plantHeadY + plantSquashY;
         const dx = p2x - P0_X;
@@ -2426,7 +2571,6 @@ export default function MarioConsoleSection() {
           images.stemBeadFill.naturalWidth > 0 &&
           dist > 3
         ) {
-          // Sample quadratic Bezier curve every 3px
           const approxLen =
             Math.hypot(p1x - P0_X, p1y - P0_Y) + Math.hypot(p2x - p1x, p2y - p1y);
           const numBeads = Math.max(2, Math.ceil(approxLen / 3));
@@ -2439,10 +2583,10 @@ export default function MarioConsoleSection() {
             const by = inv * inv * P0_Y + 2 * inv * t * p1y + t * t * p2y;
             ctx.drawImage(
               images.stemBeadOutline,
-              Math.round(bx - 5),
-              Math.round(by - 5),
-              10,
-              10
+              toDevX(bx - 5),
+              toDevY(by - 5),
+              10 * S,
+              10 * S
             );
           }
 
@@ -2454,22 +2598,22 @@ export default function MarioConsoleSection() {
             const by = inv * inv * P0_Y + 2 * inv * t * p1y + t * t * p2y;
             ctx.drawImage(
               images.stemBeadFill,
-              Math.round(bx - 4),
-              Math.round(by - 4),
-              8,
-              8
+              toDevX(bx - 4),
+              toDevY(by - 4),
+              8 * S,
+              8 * S
             );
           }
         }
 
-        // 6c. Draw HEAD from plant-head-sheet.png (cell 88x88, col = mouthFrame, row = angleRow, pivot at (44,44))
+        // 6c. Draw HEAD from plant-head-sheet.png
         if (images.plantHeadSheet?.complete && images.plantHeadSheet.naturalWidth > 0) {
           const sx = Math.max(0, Math.min(3, plantMouthFrame)) * HEAD_CELL;
           const sy = Math.max(0, Math.min(18, headRow)) * HEAD_CELL;
-          const drawW = Math.round(HEAD_CELL * plantHeadScale);
-          const drawH = Math.round(HEAD_CELL * plantHeadScale);
-          const drawX = Math.round(p2x - HEAD_PIVOT_X * plantHeadScale);
-          const drawY = Math.round(p2y - HEAD_PIVOT_Y * plantHeadScale);
+          const drawW = Math.round(HEAD_CELL * plantHeadScale * S);
+          const drawH = Math.round(HEAD_CELL * plantHeadScale * S);
+          const drawX = toDevX(p2x - HEAD_PIVOT_X * plantHeadScale);
+          const drawY = toDevY(p2y - HEAD_PIVOT_Y * plantHeadScale);
 
           ctx.drawImage(
             images.plantHeadSheet,
@@ -2487,13 +2631,12 @@ export default function MarioConsoleSection() {
         ctx.restore();
       }
 
-      // 6d. Plant OUCH Effects (fx-bump + 3 orbiting fx-star dizzy stars) & Chew Effects (crumbs + munch stars)
+      // 6d. Plant OUCH Effects
       if (
         (plantPhase === "OUCH_SQUASH" || plantPhase === "OUCH_DIZZY") &&
         images.fxBump?.complete &&
         images.fxBump.naturalWidth > 0
       ) {
-        // fx-bump.png (14x11) pops on top of head with overshoot (1x, 1.3x, 1x)
         const totalOuchTime =
           plantPhase === "OUCH_SQUASH" ? plantTimer : 0.08 + plantTimer;
         let bumpScale = 1.0;
@@ -2509,10 +2652,10 @@ export default function MarioConsoleSection() {
         const bumpCy = plantHeadY + plantSquashY - Math.cos(rad) * 24 - 8;
         ctx.drawImage(
           images.fxBump,
-          Math.round(bumpCx - bw / 2),
-          Math.round(bumpCy - bh / 2),
-          bw,
-          bh
+          toDevX(bumpCx - bw / 2),
+          toDevY(bumpCy - bh / 2),
+          bw * S,
+          bh * S
         );
       }
 
@@ -2521,26 +2664,25 @@ export default function MarioConsoleSection() {
         images.fxStar?.complete &&
         images.fxStar.naturalWidth > 0
       ) {
-        // 3 fx-star.png (11x11) dizzy stars orbit above the head for 0.8s
         const orbitCenterX = plantHeadX;
         const orbitCenterY = plantHeadY - 32;
         for (let s = 0; s < 3; s++) {
           const theta = plantTimer * Math.PI * 5 + (s * Math.PI * 2) / 3;
           const sx = orbitCenterX + Math.cos(theta) * 18;
           const sy = orbitCenterY + Math.sin(theta) * 5;
-          ctx.drawImage(images.fxStar, Math.round(sx - 5), Math.round(sy - 5), 11, 11);
+          ctx.drawImage(images.fxStar, toDevX(sx - 5.5), toDevY(sy - 5.5), 11 * S, 11 * S);
         }
       }
 
-      // 7. Three Pipes (drawn on top of the plant so the plant emerges from inside the medium pipe)
+      // 7. Three Pipes
       if (images.pipeShort?.complete && images.pipeShort.naturalWidth > 0) {
-        ctx.drawImage(images.pipeShort, PIPE1.x, PIPE1.top, 34, 32);
+        ctx.drawImage(images.pipeShort, toDevX(PIPE1.x), toDevY(PIPE1.top), 34 * S, 32 * S);
       }
       if (images.pipeMedium?.complete && images.pipeMedium.naturalWidth > 0) {
-        ctx.drawImage(images.pipeMedium, PIPE2.x, PIPE2.top, 34, 48);
+        ctx.drawImage(images.pipeMedium, toDevX(PIPE2.x), toDevY(PIPE2.top), 34 * S, 48 * S);
       }
       if (images.pipeTall?.complete && images.pipeTall.naturalWidth > 0) {
-        ctx.drawImage(images.pipeTall, PIPE3.x, PIPE3.top, 34, 64);
+        ctx.drawImage(images.pipeTall, toDevX(PIPE3.x), toDevY(PIPE3.top), 34 * S, 64 * S);
       }
 
       // 8. Hero Rainbow Light Trail Ghosts
@@ -2558,7 +2700,7 @@ export default function MarioConsoleSection() {
           const driftY = g.y - g.age * 12;
           ctx.save();
           ctx.globalAlpha = alpha;
-          ctx.translate(Math.round(g.x), Math.round(driftY - HERO_FEET_Y));
+          ctx.translate(toDevX(g.x), toDevY(driftY - HERO_FEET_Y));
           ctx.scale(g.facing, 1);
           ctx.drawImage(
             images.heroRainbow,
@@ -2566,29 +2708,26 @@ export default function MarioConsoleSection() {
             g.row * HERO_FRAME_H,
             HERO_FRAME_W,
             HERO_FRAME_H,
-            -HERO_CENTER_X,
+            -HERO_CENTER_X * S,
             0,
-            HERO_FRAME_W,
-            HERO_FRAME_H
+            HERO_FRAME_W * S,
+            HERO_FRAME_H * S
           );
           ctx.restore();
         }
         ctx.restore();
       }
 
-      // 9. Hero Sprite (hidden while inside plant during BITE/PULLBACK/CHEW/METEOR/EXPLODE)
+      // 9. Hero Sprite (drawn at device resolution with integer S scale)
       const useRainbowSheet = rainbowState === "RAINBOW";
       const sheetImg = useRainbowSheet ? images.heroRainbow : images.heroSheet;
       if (!heroHiddenByPlant && sheetImg?.complete && sheetImg.naturalWidth > 0) {
         ctx.save();
         if (rainbowState === "BLINK") {
-          // 10 Hz toggle between 0.25 and 1.0
           const blinkOn = Math.floor(rainbowTimer * 20) % 2 === 0;
           ctx.globalAlpha = blinkOn ? 0.25 : 1.0;
         }
-        const drawX = Math.round(renderHeroX);
-        const drawY = Math.round(renderHeroY - HERO_FEET_Y);
-        ctx.translate(drawX, drawY);
+        ctx.translate(toDevX(renderHeroX), toDevY(renderHeroY - HERO_FEET_Y));
         ctx.scale(facing, 1);
 
         const rowY = useRainbowSheet
@@ -2600,10 +2739,10 @@ export default function MarioConsoleSection() {
           rowY,
           HERO_FRAME_W,
           HERO_FRAME_H,
-          -HERO_CENTER_X,
+          -HERO_CENTER_X * S,
           0,
-          HERO_FRAME_W,
-          HERO_FRAME_H
+          HERO_FRAME_W * S,
+          HERO_FRAME_H * S
         );
         ctx.restore();
       }
@@ -2612,32 +2751,31 @@ export default function MarioConsoleSection() {
       if (!heroHiddenByPlant && activeBubble !== "none" && !isDragging) {
         const bImg = activeBubble === "question" ? images.bubbleQ : images.bubbleEx;
         if (bImg?.complete && bImg.naturalWidth > 0) {
-          const bob = Math.round(Math.sin(simTime * 6) * 2);
-          const bx = Math.round(renderHeroX + facing * 10 - 6);
-          const by = Math.round(renderHeroY - 42 - 8 - 15 + bob);
-          ctx.drawImage(bImg, bx, Math.max(2, by), 12, 15);
+          const bob = Math.sin(simTime * 6) * 2;
+          const bx = toDevX(renderHeroX + (facing === 1 ? 10 : -22));
+          const by = toDevY(renderHeroY - 42 - 8 - 15 + bob);
+          ctx.drawImage(bImg, bx, Math.max(0, by), 12 * S, 15 * S);
         }
       }
 
-      // 11. Chew Crumbs (2x2 pixel squares in red/blue/white) & Munch Stars (fx-star.png)
+      // 11. Chew Crumbs & Munch Stars
       for (let i = 0; i < crumbs.length; i++) {
         const cr = crumbs[i];
         ctx.fillStyle = cr.color;
-        ctx.fillRect(Math.round(cr.x), Math.round(cr.y), 2, 2);
+        ctx.fillRect(toDevX(cr.x), toDevY(cr.y), 2 * S, 2 * S);
       }
       if (images.fxStar?.complete && images.fxStar.naturalWidth > 0) {
         for (let i = 0; i < munchStars.length; i++) {
           const ms = munchStars[i];
-          ctx.drawImage(images.fxStar, Math.round(ms.x - 5), Math.round(ms.y - 5), 11, 11);
+          ctx.drawImage(images.fxStar, toDevX(ms.x - 5.5), toDevY(ms.y - 5.5), 11 * S, 11 * S);
         }
       }
 
-      // 12. Meteor during DEVOUR_METEOR (meteor-1..3, scale 1, streaks from top-right off-screen onto plant head)
+      // 12. Meteor during DEVOUR_METEOR
       if (plantPhase === "DEVOUR_METEOR") {
         const mIdx = (Math.floor(simTime * 12) % 3) + 1;
         const mImg = images[`meteor${mIdx}`];
         if (mImg?.complete && mImg.naturalWidth > 0) {
-          // meteor-1..3 is 190x120; head center is at (32, 92) inside the sprite
           const startHeadX = WORLD_W + 70;
           const startHeadY = -30;
           const endHeadX = P0_X;
@@ -2646,15 +2784,15 @@ export default function MarioConsoleSection() {
           const curHeadY = startHeadY + (endHeadY - startHeadY) * meteorProgress;
           ctx.drawImage(
             mImg,
-            Math.round(curHeadX - 32),
-            Math.round(curHeadY - 92),
-            190,
-            120
+            toDevX(curHeadX - 32),
+            toDevY(curHeadY - 92),
+            190 * S,
+            120 * S
           );
         }
       }
 
-      // 13. Smoke Puffs (fx-smoke-sheet.png: 4 frames of 22x22)
+      // 13. Smoke Puffs
       if (images.fxSmoke?.complete && images.fxSmoke.naturalWidth > 0) {
         for (let i = 0; i < smokePuffs.length; i++) {
           const sp = smokePuffs[i];
@@ -2665,21 +2803,21 @@ export default function MarioConsoleSection() {
             0,
             22,
             22,
-            Math.round(sp.x - 11),
-            Math.round(sp.y - 11),
-            22,
-            22
+            toDevX(sp.x - 11),
+            toDevY(sp.y - 11),
+            22 * S,
+            22 * S
           );
         }
       }
 
-      // 14. Sparkles, +1, and Booms (scale 1 = 36x36 world px, scale 2 = 72x72 world px)
+      // 14. Sparkles, +1, and Booms
       for (let i = 0; i < sparkles.length; i++) {
         const sp = sparkles[i];
         const fIdx = Math.min(4, Math.floor((sp.age / sp.duration) * 4) + 1);
         const sImg = images[`sparkle${fIdx}`];
         if (sImg?.complete && sImg.naturalWidth > 0) {
-          ctx.drawImage(sImg, Math.round(sp.x - 12), Math.round(sp.y - 12), 24, 24);
+          ctx.drawImage(sImg, toDevX(sp.x - 12), toDevY(sp.y - 12), 24 * S, 24 * S);
         }
       }
 
@@ -2691,10 +2829,10 @@ export default function MarioConsoleSection() {
           ctx.globalAlpha = Math.max(0, 1 - p);
           ctx.drawImage(
             images.plus1,
-            Math.round(po.x),
-            Math.round(po.y - p * 18),
-            19,
-            13
+            toDevX(po.x),
+            toDevY(po.y - p * 18),
+            19 * S,
+            13 * S
           );
           ctx.restore();
         }
@@ -2709,14 +2847,82 @@ export default function MarioConsoleSection() {
         const eImg = images[`exp${fIdx}`];
         if (eImg?.complete && eImg.naturalWidth > 0) {
           const size = Math.round(36 * bm.scale);
-          const half = Math.round(size / 2);
-          ctx.drawImage(eImg, Math.round(bm.x - half), Math.round(bm.y - half), size, size);
+          const half = size / 2;
+          ctx.drawImage(eImg, toDevX(bm.x - half), toDevY(bm.y - half), size * S, size * S);
         }
       }
 
+      // 15. SCORE HUD (Section 5.4 line 236: top-left corner, 10px from edges)
+      const hudMargin = toDevDim(10);
+      let hudDevX = hudMargin;
+      let hudDevY = hudMargin;
+
+      if (hudShakeTimer > 0) {
+        hudDevX += Math.round((Math.random() - 0.5) * 4 * (S / scaleK));
+        hudDevY += Math.round((Math.random() - 0.5) * 4 * (S / scaleK));
+      }
+
+      ctx.save();
+      // Blinks together with the hero's 1-second respawn blink (same 10 Hz rhythm and phase)
+      if (rainbowState === "BLINK") {
+        const blinkOn = Math.floor(rainbowTimer * 20) % 2 === 0;
+        ctx.globalAlpha = blinkOn ? 0.25 : 1.0;
+      }
+
+      // Tiny rainbow coin icon (minicoin-rainbow-sheet.png, spinning at 8 fps, native size 14x18 x K)
+      const coinIconFrame = Math.floor(simTime * 8) % 4;
+      if (images.rainbowCoin?.complete && images.rainbowCoin.naturalWidth > 0) {
+        ctx.drawImage(
+          images.rainbowCoin,
+          coinIconFrame * 14,
+          0,
+          14,
+          18,
+          hudDevX,
+          hudDevY,
+          14 * S,
+          18 * S
+        );
+      }
+
+      // "x" and TWO-DIGIT counter in Press Start 2P (12px at K=2, 10px at K=1)
+      const fontSizePx = (scaleK === 2 ? 12 : 10) * (S / scaleK);
+      ctx.font = `${fontSizePx}px var(--font-press-start-2p), monospace`;
+      ctx.textBaseline = "middle";
+
+      const textX = hudDevX + 14 * S + toDevDim(6);
+      const textY = hudDevY + Math.round(9 * S);
+      const scoreStr = `x${String(coinScore).padStart(2, "0")}`;
+
+      ctx.save();
+      if (hudPopTimer > 0) {
+        ctx.translate(textX, textY);
+        ctx.scale(1.25, 1.25);
+        ctx.translate(-textX, -textY);
+      }
+
+      // Hard 2px outline (#2B1B0E in 4 directions, no blur, no background box)
+      const outlineDev = Math.max(2, Math.round(2 * (S / scaleK)));
+      ctx.fillStyle = "#2B1B0E";
+      ctx.fillText(scoreStr, textX - outlineDev, textY);
+      ctx.fillText(scoreStr, textX + outlineDev, textY);
+      ctx.fillText(scoreStr, textX, textY - outlineDev);
+      ctx.fillText(scoreStr, textX, textY + outlineDev);
+
+      // Text color: red flash on bite, yellow flash on +1, white normal
+      if (hudRedFlashTimer > 0) {
+        ctx.fillStyle = "#E52521";
+      } else if (hudFlashYellowTimer > 0) {
+        ctx.fillStyle = "#FFD700";
+      } else {
+        ctx.fillStyle = "#FFFFFF";
+      }
+      ctx.fillText(scoreStr, textX, textY);
       ctx.restore();
 
-      // 15. White Flash Overlay (200ms on meteor explosion, or two 100ms flashes on DEATH + SPIT)
+      ctx.restore();
+
+      // 16. White Flash Overlay
       let currentFlash = flashAlpha;
       if (doubleFlashActive) {
         if (doubleFlashTimer < 0.1 || (doubleFlashTimer >= 0.14 && doubleFlashTimer < 0.24)) {
@@ -2726,7 +2932,7 @@ export default function MarioConsoleSection() {
       if (currentFlash > 0.01) {
         ctx.save();
         ctx.fillStyle = `rgba(255, 255, 255, ${currentFlash.toFixed(3)})`;
-        ctx.fillRect(0, 0, wn, WORLD_H);
+        ctx.fillRect(0, 0, wn * S, WORLD_H * S);
         ctx.restore();
       }
 
@@ -2803,6 +3009,11 @@ export default function MarioConsoleSection() {
       frameEl.dataset.scaleK = String(scaleK);
       frameEl.dataset.viewLeft = String(viewLeft);
       frameEl.dataset.solidPenetrationCount = String(solidPenetrationCount);
+      frameEl.dataset.coinScore = String(coinScore);
+      frameEl.dataset.worstDx = String(worstDxRecorded.toFixed(3));
+      frameEl.dataset.worstDy = String(worstDyRecorded.toFixed(3));
+      frameEl.dataset.minFrameTicks = String(minFrameTicksRecorded === 999 ? 0 : minFrameTicksRecorded);
+      frameEl.dataset.solidOverlap = String(solidOverlapCountRecorded);
     };
 
     // Convert client (x, y) to world (wx, wy)
@@ -3015,20 +3226,138 @@ export default function MarioConsoleSection() {
 
     renderScene();
     if (typeof window !== "undefined") {
-      (window as unknown as { __dropHeroOnBlocks?: (wx?: number) => void }).__dropHeroOnBlocks = (wx = 250) => {
-        heroX = wx;
-        heroY = BLOCKS_Y;
+      const win = window as unknown as Record<string, unknown>;
+      win.__startRecordingTicks = () => {
+        recordedTicks.length = 0;
+        tickCount = 0;
+        worstDxRecorded = 0;
+        worstDyRecorded = 0;
+        minFrameTicksRecorded = 999;
+        solidOverlapCountRecorded = 0;
+        lastRecordedFrame = heroFrame;
+        lastFrameTickCount = 0;
+        isFirstFrameChange = true;
+        isRecordingTicks = true;
+      };
+      win.__stopRecordingTicks = () => {
+        isRecordingTicks = false;
+        return {
+          worstDx: worstDxRecorded,
+          worstDy: worstDyRecorded,
+          minFrameTicks: minFrameTicksRecorded === 999 ? 0 : minFrameTicksRecorded,
+          solidOverlapCount: solidOverlapCountRecorded,
+          totalTicks: recordedTicks.length,
+          ticks: recordedTicks,
+        };
+      };
+      win.__dropHeroAt = (wx: number, wy: number) => {
+        if (heroHiddenByPlant || routePhase === "EATEN_HIDDEN") return;
+        isDragging = false;
+        activePointerId = null;
+        heroX = Math.max(minHeroX, Math.min(maxHeroX, wx));
+        heroY = Math.max(HITBOX_H, Math.min(GROUND_Y, wy));
+        prevHeroX = heroX;
+        prevHeroY = heroY;
         heroVx = 0;
         heroVy = 0;
-        isDragging = false;
-        resumeFromCurrentSurface();
+        justDropped = true;
+        const surf = detectCurrentSurface();
+        if (surf) {
+          if (surf === "blocks") {
+            const distToLeft = Math.abs(heroX - 216);
+            const distToRight = Math.abs(heroX - 296);
+            if (distToLeft <= distToRight) {
+              blockTargetEdgeX = 216 - HITBOX_HALF_W;
+              blockWalkDir = -1;
+              facing = -1;
+            } else {
+              blockTargetEdgeX = 296 + HITBOX_HALF_W;
+              blockWalkDir = 1;
+              facing = 1;
+            }
+            routePhase = "BLOCKS_WALK_TO_EDGE";
+            phaseTimer = 0;
+            walkAnimTime = 0;
+            walkDistanceAccum = 0;
+            heroFrame = WALK_FRAMES[0];
+            lastRecordedFrame = WALK_FRAMES[0];
+            lastFrameTickCount = tickCount;
+            isFirstFrameChange = true;
+          } else {
+            routePhase = "DROP_LAND_SQUASH";
+            phaseTimer = 0;
+            heroFrame = 1;
+            lastRecordedFrame = 1;
+            lastFrameTickCount = tickCount;
+            isFirstFrameChange = true;
+          }
+        } else {
+          routePhase = "AIR_FALL";
+          heroFrame = 8;
+          lastRecordedFrame = 8;
+          lastFrameTickCount = tickCount;
+          isFirstFrameChange = true;
+        }
       };
+      win.__dropHeroOnBlocks = (wx = 250) => {
+        (win.__dropHeroAt as (x: number, y: number) => void)(wx, BLOCKS_Y);
+      };
+      win.__triggerCollectCoin = () => {
+        collectRainbowCoin();
+      };
+      win.__triggerPlantBite = () => {
+        plantPhase = "DEVOUR_BITE";
+        plantTimer = 0;
+        plantMouthFrame = 3;
+        heroHiddenByPlant = true;
+        isDragging = false;
+        activePointerId = null;
+        heroVx = 0;
+        heroVy = 0;
+        routePhase = "EATEN_HIDDEN";
+        activeBubble = "none";
+        sparkles.push({ x: plantHeadX, y: plantHeadY, age: 0, duration: 0.32 });
+        playCrunchSfx();
+        coinScore = 0;
+        hudRedFlashTimer = 0.25;
+        hudShakeTimer = 0.25;
+        setAnnouncedScore(0);
+        frameEl.dataset.coinScore = "0";
+      };
+      win.__triggerPlantDevour = () => {
+        startDevourSequence();
+      };
+      win.__getMarioState = () => ({
+        coinScore,
+        rainbowState,
+        rainbowTimer,
+        heroX,
+        heroY,
+        heroVx,
+        heroVy,
+        heroFrame,
+        routePhase,
+        plantPhase,
+        worstDx: worstDxRecorded,
+        worstDy: worstDyRecorded,
+        minFrameTicks: minFrameTicksRecorded === 999 ? 0 : minFrameTicksRecorded,
+        solidOverlap: solidOverlapCountRecorded,
+        totalTicks: recordedTicks.length,
+      });
     }
     startLoop();
 
     return () => {
       if (typeof window !== "undefined") {
-        delete (window as unknown as { __dropHeroOnBlocks?: unknown }).__dropHeroOnBlocks;
+        const win = window as unknown as Record<string, unknown>;
+        delete win.__startRecordingTicks;
+        delete win.__stopRecordingTicks;
+        delete win.__dropHeroAt;
+        delete win.__dropHeroOnBlocks;
+        delete win.__triggerCollectCoin;
+        delete win.__triggerPlantBite;
+        delete win.__triggerPlantDevour;
+        delete win.__getMarioState;
       }
       stopLoop();
       io.disconnect();
@@ -3066,6 +3395,9 @@ export default function MarioConsoleSection() {
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-7 lg:gap-[40px] items-center">
         {/* LEFT: Wide Landscape Interactive Mario Console (.mario-zone) */}
         <div className="w-full flex flex-col items-start">
+          <div className="sr-only" aria-live="polite">
+            {`Skor koin: ${String(announcedScore).padStart(2, "0")}`}
+          </div>
           <div className="mario-zone max-w-full">
             <div
               ref={frameRef}

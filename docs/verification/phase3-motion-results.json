@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-10-21T01:37:35.304Z",
+  "durationSeconds": "32.46",
+  "totalTicks": 1366,
+  "metrics": {
+    "worstDx": 1.1666666666666856,
+    "passDx": true,
+    "worstDy": 6,
+    "passDy": true,
+    "minFrameTicks": 4,
+    "passFrameTicks": true,
+    "solidOverlapCount": 0,
+    "passSolid": true
+  },
+  "scoreHud": {
+    "initialScore": "0",
+    "scoreAfterCoin1": "1",
+    "ariaAfterCoin1": "Skor koin: 01",
+    "scoreAfterCoin2": "2",
+    "scoreAfterBite": "0"
+  },
+  "overallPass": true
+}
