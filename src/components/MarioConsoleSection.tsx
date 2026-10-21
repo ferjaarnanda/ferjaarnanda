@@ -507,6 +507,7 @@ export default function MarioConsoleSection() {
     let hudFlashYellowTimer = 0;
     let hudRedFlashTimer = 0;
     let hudShakeTimer = 0;
+    let hudPlus1Timer = 0;
 
     // MOTION SMOOTHNESS Item 2: Walk animation is distance-driven (advance 1 frame per 6 native px)
     let walkDistanceAccum = 0;
@@ -919,6 +920,7 @@ export default function MarioConsoleSection() {
       coinScore = Math.min(99, coinScore + 1);
       hudPopTimer = 0.12;
       hudFlashYellowTimer = 0.12;
+      hudPlus1Timer = 0.65;
       setAnnouncedScore(coinScore);
       frameEl.dataset.coinScore = String(coinScore);
 
@@ -1367,13 +1369,6 @@ export default function MarioConsoleSection() {
             activeBubble = "none";
             sparkles.push({ x: plantHeadX, y: plantHeadY, age: 0, duration: 0.32 });
             playCrunchSfx();
-
-            // SCORE HUD: drops to 00, flashes red, shakes +-2px for 250ms
-            coinScore = 0;
-            hudRedFlashTimer = 0.25;
-            hudShakeTimer = 0.25;
-            setAnnouncedScore(0);
-            frameEl.dataset.coinScore = "0";
           }
           break;
         }
@@ -1493,6 +1488,13 @@ export default function MarioConsoleSection() {
             routePhase = "STEP1_LEFT_IDLE";
             phaseTimer = 0;
 
+            // SCORE HUD: resets to 00 ONLY at respawn, flashes red, shakes +-2px for 250ms, then blinks in sync
+            coinScore = 0;
+            hudRedFlashTimer = 0.25;
+            hudShakeTimer = 0.25;
+            setAnnouncedScore(0);
+            frameEl.dataset.coinScore = "0";
+
             // 8. Plant stays gone for 8s, then rises normally
             plantPhase = "HIDDEN";
             plantTimer = 0;
@@ -1595,6 +1597,13 @@ export default function MarioConsoleSection() {
           phaseTimer = 0;
           walkAnimTime = 0;
           facing = 1;
+
+          // SCORE HUD: resets to 00 on return after being spat out, flashes red, shakes +-2px for 250ms, then blinks in sync
+          coinScore = 0;
+          hudRedFlashTimer = 0.25;
+          hudShakeTimer = 0.25;
+          setAnnouncedScore(0);
+          frameEl.dataset.coinScore = "0";
         }
       } else if (isDragging) {
         routePhase = "DRAGGING";
@@ -2329,6 +2338,7 @@ export default function MarioConsoleSection() {
       if (hudFlashYellowTimer > 0) hudFlashYellowTimer = Math.max(0, hudFlashYellowTimer - dt);
       if (hudRedFlashTimer > 0) hudRedFlashTimer = Math.max(0, hudRedFlashTimer - dt);
       if (hudShakeTimer > 0) hudShakeTimer = Math.max(0, hudShakeTimer - dt);
+      if (hudPlus1Timer > 0) hudPlus1Timer = Math.max(0, hudPlus1Timer - dt);
 
       // Telemetry & Test Recording System (Item 5)
       if (isRecordingTicks) {
@@ -2852,14 +2862,17 @@ export default function MarioConsoleSection() {
         }
       }
 
-      // 15. SCORE HUD (Section 5.4 line 236: top-left corner, 10px from edges)
-      const hudMargin = toDevDim(10);
-      let hudDevX = hudMargin;
-      let hudDevY = hudMargin;
+      // 15. SCORE HUD (Section 5.4 line 236: top-left corner, 14px from left and top edges)
+      // ONLY the number, nothing else: NO coin icon, NO "x", NO label, NO box.
+      // A two-digit counter (00 to 99) in Press Start 2P, BIG: 28px at K=2 (20px at K=1),
+      // white with a hard 3px outline (#2B1B0E in eight directions, no blur).
+      const hudMarginDev = Math.round(14 * (S / scaleK));
+      let textX = hudMarginDev;
+      let textY = hudMarginDev;
 
       if (hudShakeTimer > 0) {
-        hudDevX += Math.round((Math.random() - 0.5) * 4 * (S / scaleK));
-        hudDevY += Math.round((Math.random() - 0.5) * 4 * (S / scaleK));
+        textX += Math.round((Math.random() - 0.5) * 4 * (S / scaleK));
+        textY += Math.round((Math.random() - 0.5) * 4 * (S / scaleK));
       }
 
       ctx.save();
@@ -2869,47 +2882,36 @@ export default function MarioConsoleSection() {
         ctx.globalAlpha = blinkOn ? 0.25 : 1.0;
       }
 
-      // Tiny rainbow coin icon (minicoin-rainbow-sheet.png, spinning at 8 fps, native size 14x18 x K)
-      const coinIconFrame = Math.floor(simTime * 8) % 4;
-      if (images.rainbowCoin?.complete && images.rainbowCoin.naturalWidth > 0) {
-        ctx.drawImage(
-          images.rainbowCoin,
-          coinIconFrame * 14,
-          0,
-          14,
-          18,
-          hudDevX,
-          hudDevY,
-          14 * S,
-          18 * S
-        );
-      }
+      const fontSizeDev = (scaleK === 2 ? 28 : 20) * (S / scaleK);
+      ctx.font = `${fontSizeDev}px var(--font-press-start-2p), monospace`;
+      ctx.textBaseline = "top";
+      ctx.textAlign = "left";
 
-      // "x" and TWO-DIGIT counter in Press Start 2P (12px at K=2, 10px at K=1)
-      const fontSizePx = (scaleK === 2 ? 12 : 10) * (S / scaleK);
-      ctx.font = `${fontSizePx}px var(--font-press-start-2p), monospace`;
-      ctx.textBaseline = "middle";
-
-      const textX = hudDevX + 14 * S + toDevDim(6);
-      const textY = hudDevY + Math.round(9 * S);
-      const scoreStr = `x${String(coinScore).padStart(2, "0")}`;
+      const scoreStr = String(coinScore).padStart(2, "0");
 
       ctx.save();
       if (hudPopTimer > 0) {
-        ctx.translate(textX, textY);
+        const textMetrics = ctx.measureText(scoreStr);
+        const cx = textX + textMetrics.width / 2;
+        const cy = textY + fontSizeDev / 2;
+        ctx.translate(cx, cy);
         ctx.scale(1.25, 1.25);
-        ctx.translate(-textX, -textY);
+        ctx.translate(-cx, -cy);
       }
 
-      // Hard 2px outline (#2B1B0E in 4 directions, no blur, no background box)
-      const outlineDev = Math.max(2, Math.round(2 * (S / scaleK)));
+      // Hard 3px outline (#2B1B0E in eight directions, no blur, no background box)
+      const outlineDev = Math.max(3, Math.round(3 * (S / scaleK)));
       ctx.fillStyle = "#2B1B0E";
       ctx.fillText(scoreStr, textX - outlineDev, textY);
       ctx.fillText(scoreStr, textX + outlineDev, textY);
       ctx.fillText(scoreStr, textX, textY - outlineDev);
       ctx.fillText(scoreStr, textX, textY + outlineDev);
+      ctx.fillText(scoreStr, textX - outlineDev, textY - outlineDev);
+      ctx.fillText(scoreStr, textX + outlineDev, textY - outlineDev);
+      ctx.fillText(scoreStr, textX - outlineDev, textY + outlineDev);
+      ctx.fillText(scoreStr, textX + outlineDev, textY + outlineDev);
 
-      // Text color: red flash on bite, yellow flash on +1, white normal
+      // Text color: red flash on respawn reset, yellow flash on +1, white normal
       if (hudRedFlashTimer > 0) {
         ctx.fillStyle = "#E52521";
       } else if (hudFlashYellowTimer > 0) {
@@ -2919,6 +2921,24 @@ export default function MarioConsoleSection() {
       }
       ctx.fillText(scoreStr, textX, textY);
       ctx.restore();
+
+      // Rising text-plus1.png beside the score number on +1
+      if (hudPlus1Timer > 0 && images.plus1?.complete && images.plus1.naturalWidth > 0) {
+        const p = 1 - (hudPlus1Timer / 0.65);
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - p);
+        const numW = ctx.measureText(scoreStr).width;
+        const plus1X = textX + numW + Math.round(8 * (S / scaleK));
+        const plus1Y = textY + Math.round(4 * (S / scaleK)) - Math.round(p * 14 * (S / scaleK));
+        ctx.drawImage(
+          images.plus1,
+          plus1X,
+          plus1Y,
+          19 * S,
+          13 * S
+        );
+        ctx.restore();
+      }
 
       ctx.restore();
 
@@ -3318,11 +3338,6 @@ export default function MarioConsoleSection() {
         activeBubble = "none";
         sparkles.push({ x: plantHeadX, y: plantHeadY, age: 0, duration: 0.32 });
         playCrunchSfx();
-        coinScore = 0;
-        hudRedFlashTimer = 0.25;
-        hudShakeTimer = 0.25;
-        setAnnouncedScore(0);
-        frameEl.dataset.coinScore = "0";
       };
       win.__triggerPlantDevour = () => {
         startDevourSequence();
@@ -3396,7 +3411,7 @@ export default function MarioConsoleSection() {
         {/* LEFT: Wide Landscape Interactive Mario Console (.mario-zone) */}
         <div className="w-full flex flex-col items-start">
           <div className="sr-only" aria-live="polite">
-            {`Skor koin: ${String(announcedScore).padStart(2, "0")}`}
+            {`Skor: ${announcedScore}`}
           </div>
           <div className="mario-zone max-w-full">
             <div

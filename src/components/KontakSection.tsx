@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { siteConfig } from "@/data/site";
+import { whatsappLink, MAILTO } from "@/data/contact";
 import { services } from "@/data/services";
 import { sendContactMessage } from "@/app/actions/contact";
 import { contactSchema, ContactFormData } from "@/lib/contact-schema";
@@ -96,7 +97,7 @@ function isValidSocialUrl(url?: string): boolean {
   if (!url) return false;
   const u = url.trim().toLowerCase();
   if (u === "" || u === "#") return false;
-  if (u.includes("example.com") || u.includes("placeholder") || u.includes("yourusername")) {
+  if (u.includes("placeholder") || u.includes("yourusername") || u.includes("username")) {
     return false;
   }
   return true;
@@ -238,12 +239,15 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
         });
       } else {
         // Keep all typed values intact on error!
-        setServerError(res.error || "Gagal mengirim pesan.");
-        setServerWaUrl(res.waUrl || siteConfig.contacts.whatsappUrl);
+        if (res.fieldErrors) {
+          setFieldErrors(res.fieldErrors);
+        }
+        setServerError(res.error || "Pesan belum terkirim. Coba lagi atau hubungi lewat WhatsApp.");
+        setServerWaUrl(res.waUrl || whatsappLink());
       }
     } catch {
-      setServerError("Terjadi kendala jaringan. Silakan hubungi via WhatsApp.");
-      setServerWaUrl(siteConfig.contacts.whatsappUrl);
+      setServerError("Pesan belum terkirim. Coba lagi atau hubungi lewat WhatsApp.");
+      setServerWaUrl(whatsappLink());
     } finally {
       setIsSubmitting(false);
     }
@@ -281,7 +285,7 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
             <div className="flex flex-wrap items-center gap-4 mb-10">
               {/* WhatsApp Button (solid red, white text, 10px radius, official brand icon) */}
               <a
-                href={siteConfig.contacts.whatsappUrl}
+                href={whatsappLink()}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-primary inline-flex items-center gap-2.5 px-6 py-3 text-sm font-medium no-underline"
@@ -292,7 +296,7 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
 
               {/* Gmail Button (white, 1px red border, red text, 10px radius, official brand icon) */}
               <a
-                href={siteConfig.contacts.gmailUrl}
+                href={MAILTO}
                 className="btn-secondary inline-flex items-center gap-2.5 px-6 py-3 text-sm font-medium no-underline"
               >
                 <GmailIcon className="w-[18px] h-[18px] fill-current shrink-0" />
@@ -330,7 +334,7 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
                 aria-live="polite"
                 className="p-6 bg-emerald-50 border border-emerald-200 rounded-[10px] text-emerald-900 flex flex-col gap-3"
               >
-                <div className="font-semibold text-base">Pesan Berhasil Terkirim!</div>
+                <div className="font-semibold text-base">Pesan terkirim, terima kasih!</div>
                 <p className="text-sm leading-relaxed">
                   Terima kasih sudah menghubungi. Aku akan meninjau kebutuhan websitemu dan segera membalas ke emailmu.
                 </p>
@@ -343,7 +347,7 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
                     Kirim pesan lain &rarr;
                   </button>
                   <a
-                    href={siteConfig.contacts.whatsappUrl}
+                    href={whatsappLink()}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs font-semibold text-emerald-800 underline underline-offset-2"
@@ -431,7 +435,7 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
                 {/* Jenis Website (The six types + "Lainnya") */}
                 <div className="flex flex-col">
                   <label
-                    htmlFor="jenis"
+                    htmlFor="jenis-website"
                     className="text-xs uppercase font-medium tracking-wider text-obsidian mb-1.5"
                   >
                     Jenis Website
@@ -439,7 +443,7 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
                   <div className="relative">
                     <select
                       ref={jenisRef}
-                      id="jenis"
+                      id="jenis-website"
                       name="jenis"
                       value={formData.jenis}
                       onChange={(e) => handleChange("jenis", e.target.value)}

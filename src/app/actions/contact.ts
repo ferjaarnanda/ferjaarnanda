@@ -2,12 +2,13 @@
 
 import { Resend } from "resend";
 import { headers } from "next/headers";
-import { siteConfig } from "@/data/site";
+import { EMAIL, whatsappLink } from "@/data/contact";
 import { contactSchema, ContactFormData } from "@/lib/contact-schema";
 
 export type ContactState = {
-  success?: boolean;
+  success: boolean;
   error?: string;
+  fieldErrors?: Record<string, string>;
   fallbackToWa?: boolean;
   waUrl?: string;
 };
@@ -47,7 +48,7 @@ export async function sendContactMessage(
       error:
         "Terlalu banyak permintaan. Silakan coba lagi beberapa saat lagi atau hubungi via WhatsApp.",
       fallbackToWa: true,
-      waUrl: siteConfig.contacts.whatsappUrl,
+      waUrl: whatsappLink(),
     };
   }
 
@@ -62,33 +63,54 @@ export async function sendContactMessage(
       _hp: payload.get("_hp")?.toString() || "",
     };
   } else {
-    raw = payload;
+    raw = {
+      nama: payload.nama || "",
+      email: payload.email || "",
+      jenis: payload.jenis || "",
+      customJenis: payload.customJenis || "",
+      pesan: payload.pesan || "",
+      _hp: payload._hp || "",
+    };
   }
 
+  // Honeypot check
+  if (raw._hp && raw._hp.length > 0) {
+    return {
+      success: false,
+      error: "Spam terdeteksi.",
+    };
+  }
+
+  // Server-side Zod validation
   const parsed = contactSchema.safeParse(raw);
   if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    parsed.error.issues.forEach((issue) => {
+      const fieldName = issue.path[0] as string;
+      if (!fieldErrors[fieldName]) {
+        fieldErrors[fieldName] = issue.message;
+      }
+    });
     const firstError = parsed.error.issues[0]?.message || "Data formulir tidak valid";
     return {
       success: false,
       error: firstError,
+      fieldErrors,
     };
   }
 
   const { nama, email, jenis, customJenis, pesan } = parsed.data;
-  const jenisDisplay =
-    jenis === "Lainnya" && customJenis
-      ? `Lainnya (${customJenis})`
-      : jenis;
+  const jenisWebsite = jenis === "Lainnya" && customJenis ? customJenis : jenis;
 
   // Prefilled WhatsApp URL as fallback
-  const waMessage = `Halo Ferja Arnanda, perkenalkan saya ${nama} (${email}). Saya tertarik dengan: ${jenisDisplay}.\n\nPesan:\n${pesan}`;
-  const waUrl = `https://wa.me/${siteConfig.contacts.whatsappNumber.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(waMessage)}`;
+  const waMessage = `Halo Ferja Arnanda, perkenalkan saya ${nama} (${email}). Saya tertarik dengan: ${jenisWebsite}.\n\nPesan:\n${pesan}`;
+  const waUrl = whatsappLink(waMessage);
 
   const resendApiKey = process.env.RESEND_API_KEY;
-  const toEmail = process.env.CONTACT_EMAIL || siteConfig.contacts.gmail;
 
   // Graceful fallback if Resend API key is not configured
   if (!resendApiKey) {
+    console.error("[contact] RESEND_API_KEY is not set");
     return {
       success: false,
       error:
@@ -101,18 +123,29 @@ export async function sendContactMessage(
   try {
     const resend = new Resend(resendApiKey);
     const { error } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || "Ferja Portfolio <onboarding@resend.dev>",
-      to: [toEmail],
+      from: "Ferja Arnanda <onboarding@resend.dev>",
+      to: [EMAIL],
       replyTo: email,
-      subject: `Pesan Baru dari ${nama} - ${jenisDisplay}`,
-      text: `Nama: ${nama}\nEmail: ${email}\nJenis Website: ${jenisDisplay}\n\nPesan:\n${pesan}`,
+      subject: `Pesan baru dari ${nama} - ${jenisWebsite}`,
+      text: `Nama: ${nama}\nEmail: ${email}\nJenis Website: ${jenisWebsite}\n\nPesan:\n${pesan}`,
+      html: `
+        <div style="font-family: sans-serif; line-height: 1.6; color: #111;">
+          <h2>Pesan Baru dari Formulir Kontak</h2>
+          <p><strong>Nama:</strong> ${nama}</p>
+          <p><strong>Email:</strong> <a href="mailto:${email}">${email}</a></p>
+          <p><strong>Jenis Website:</strong> ${jenisWebsite}</p>
+          <hr style="border: none; border-top: 1px solid #eee; margin: 16px 0;" />
+          <p><strong>Pesan:</strong></p>
+          <p style="white-space: pre-wrap; background: #f9f9f9; padding: 12px; border-radius: 6px;">${pesan}</p>
+        </div>
+      `,
     });
 
     if (error) {
-      console.error("Resend error:", error);
+      console.error("[contact] Resend error:", error);
       return {
         success: false,
-        error: "Gagal mengirim email. Silakan langsung hubungi melalui WhatsApp.",
+        error: "Pesan belum terkirim. Coba lagi atau hubungi lewat WhatsApp.",
         fallbackToWa: true,
         waUrl,
       };
@@ -122,10 +155,10 @@ export async function sendContactMessage(
       success: true,
     };
   } catch (err) {
-    console.error("Contact action error:", err);
+    console.error("[contact] Resend error:", err);
     return {
       success: false,
-      error: "Terjadi gangguan saat mengirim. Silakan hubungi langsung melalui WhatsApp.",
+      error: "Pesan belum terkirim. Coba lagi atau hubungi lewat WhatsApp.",
       fallbackToWa: true,
       waUrl,
     };

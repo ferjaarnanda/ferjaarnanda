@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { packages, PackageItem } from "@/data/packages";
-import { siteConfig } from "@/data/site";
+import { whatsappLink } from "@/data/contact";
 
 interface PaketSectionProps {
   onSelectPackage?: (pkg: PackageItem) => void;
@@ -15,8 +15,6 @@ export default function PaketSection({ onSelectPackage }: PaketSectionProps) {
   const carouselRef = useRef<HTMLDivElement>(null);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-
-  const whatsappPhone = siteConfig.contacts.whatsappNumber.replace(/[^0-9]/g, "");
 
   useEffect(() => {
     const el = sectionRef.current;
@@ -93,14 +91,9 @@ export default function PaketSection({ onSelectPackage }: PaketSectionProps) {
   }, []);
 
   const getWhatsAppUrl = (pkg: PackageItem) => {
-    let message = "";
-    if (pkg.id === "custom-class") {
-      message =
-        "Halo, saya tertarik dengan paket Custom Class. Saya mau diskusi spesifikasi website.";
-    } else {
-      message = `Halo, saya tertarik dengan paket ${pkg.name} (${pkg.price}). Bisa konsultasi lebih lanjut?`;
-    }
-    return `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`;
+    return whatsappLink(
+      `Halo, saya tertarik dengan paket ${pkg.name} (${pkg.price}). Boleh saya diskusi lebih lanjut?`
+    );
   };
 
   const scrollToCard = (index: number) => {
