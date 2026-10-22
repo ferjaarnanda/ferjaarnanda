@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { siteConfig } from "@/data/site";
-import { whatsappLink, MAILTO } from "@/data/contact";
+import { EMAIL, whatsappLink, MAILTO } from "@/data/contact";
 import { services } from "@/data/services";
 import { sendContactMessage } from "@/app/actions/contact";
 import { contactSchema, ContactFormData } from "@/lib/contact-schema";
@@ -117,6 +117,7 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [serverWaUrl, setServerWaUrl] = useState<string | null>(null);
+  const [serverMailtoUrl, setServerMailtoUrl] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -154,8 +155,8 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
       if (trimmed.length > 80) return "Maksimal 80 karakter";
     }
     if (name === "pesan") {
-      if (!trimmed) return "Belum diisi";
-      if (trimmed.length < 10) return "Pesan terlalu pendek";
+      // Optional field: no validation error
+      return "";
     }
     return "";
   };
@@ -215,8 +216,6 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
         jenisRef.current?.focus();
       } else if (errors.customJenis) {
         customJenisRef.current?.focus();
-      } else if (errors.pesan) {
-        pesanRef.current?.focus();
       }
       return;
     }
@@ -242,12 +241,14 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
         if (res.fieldErrors) {
           setFieldErrors(res.fieldErrors);
         }
-        setServerError(res.error || "Pesan belum terkirim. Coba lagi atau hubungi lewat WhatsApp.");
+        setServerError(res.error || "Pesan belum terkirim. Coba lagi sebentar.");
         setServerWaUrl(res.waUrl || whatsappLink());
+        setServerMailtoUrl(res.mailtoUrl || `mailto:${EMAIL}`);
       }
     } catch {
-      setServerError("Pesan belum terkirim. Coba lagi atau hubungi lewat WhatsApp.");
+      setServerError("Pesan belum terkirim. Coba lagi sebentar.");
       setServerWaUrl(whatsappLink());
+      setServerMailtoUrl(`mailto:${EMAIL}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -547,23 +548,35 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
                   {isSubmitting ? "Mengirim..." : "Kirim"}
                 </button>
 
-                {/* Red Error Message UNDER button (no top banner) with WhatsApp fallback */}
+                {/* Red Error Message UNDER button (no top banner) with WhatsApp and Email fallback buttons */}
                 {serverError && (
                   <div
                     role="alert"
-                    className="p-3 bg-red-50 border border-[#E52521]/30 rounded-[10px] text-xs text-[#E52521] flex flex-col gap-1.5"
+                    className="p-3.5 bg-red-50 border border-[#E52521]/30 rounded-[10px] text-xs text-[#E52521] flex flex-col gap-2.5"
                   >
-                    <span>{serverError}</span>
-                    {serverWaUrl && (
-                      <a
-                        href={serverWaUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-semibold underline underline-offset-2"
-                      >
-                        Buka percakapan via WhatsApp &rarr;
-                      </a>
-                    )}
+                    <span className="font-medium text-[13px]">{serverError}</span>
+                    <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                      {serverWaUrl && (
+                        <a
+                          href={serverWaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E52521] text-white rounded-[6px] font-medium hover:bg-[#c91e1a] transition-colors"
+                        >
+                          <WhatsappIcon className="w-3.5 h-3.5 fill-current" />
+                          <span>WhatsApp &rarr;</span>
+                        </a>
+                      )}
+                      {serverMailtoUrl && (
+                        <a
+                          href={serverMailtoUrl}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#E52521] text-[#E52521] rounded-[6px] font-medium hover:bg-red-50 transition-colors"
+                        >
+                          <GmailIcon className="w-3.5 h-3.5 fill-current" />
+                          <span>Kirim lewat email &rarr;</span>
+                        </a>
+                      )}
+                    </div>
                   </div>
                 )}
               </form>

@@ -2873,13 +2873,12 @@ export default function MarioConsoleSection() {
       const p1El = plus1Ref.current;
 
       if (scoreHudEl && d1El && d2El && p1El) {
-        const isDesk = typeof window !== "undefined" ? window.innerWidth >= 1024 : false;
-        const scale = isDesk ? 3 : 2;
-        const digitW = 12 * scale; // 36px desktop, 24px phone
-        const digitH = 16 * scale; // 48px desktop, 32px phone
-        const digitAdv = 11 * scale; // 33px desktop, 22px phone
-        const sheetW = 132 * scale; // 396px desktop, 264px phone
-        const sheetH = 16 * scale; // 48px desktop, 32px phone
+        const scale = 2; // 2 CSS px per art pixel on desktop AND phones
+        const digitW = 12 * scale; // 24px
+        const digitH = 16 * scale; // 32px
+        const digitAdv = 11 * scale; // 22px (11 art pixels advance)
+        const sheetW = 132 * scale; // 264px
+        const sheetH = 16 * scale; // 32px
 
         let sheetUrl = "/environment/score-digits-white.png";
         if (hudRedTimer > 0) {
@@ -2936,8 +2935,8 @@ export default function MarioConsoleSection() {
           const p = 1 - (hudPlus1Timer / 0.60);
           const riseY = -Math.round(p * 12);
           const fade = Math.max(0, 1 - p);
-          const plus1Left = digitAdv + digitW + (isDesk ? 6 : 4);
-          const plus1Top = isDesk ? Math.round((digitH - 32) / 2) : 0;
+          const plus1Left = digitAdv + digitW + 4; // 50px
+          const plus1Top = 0; // Same size and height as the score (scale 2)
           p1El.style.display = "block";
           p1El.style.width = "46px";
           p1El.style.height = "32px";
@@ -3464,10 +3463,10 @@ export default function MarioConsoleSection() {
                   className="absolute top-0 left-0"
                   style={{
                     imageRendering: "pixelated",
-                    width: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? 36 : 24,
-                    height: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? 48 : 32,
+                    width: 24,
+                    height: 32,
                     backgroundImage: "url(/environment/score-digits-white.png)",
-                    backgroundSize: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? "396px 48px" : "264px 32px",
+                    backgroundSize: "264px 32px",
                     backgroundPosition: "0px 0px",
                     backgroundRepeat: "no-repeat",
                   }}
@@ -3477,13 +3476,13 @@ export default function MarioConsoleSection() {
                   className="absolute top-0"
                   style={{
                     imageRendering: "pixelated",
-                    width: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? 36 : 24,
-                    height: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? 48 : 32,
+                    width: 24,
+                    height: 32,
                     backgroundImage: "url(/environment/score-digits-white.png)",
-                    backgroundSize: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? "396px 48px" : "264px 32px",
+                    backgroundSize: "264px 32px",
                     backgroundPosition: "0px 0px",
                     backgroundRepeat: "no-repeat",
-                    left: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? 33 : 22,
+                    left: 22,
                   }}
                 />
                 <div

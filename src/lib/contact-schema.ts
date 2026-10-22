@@ -10,11 +10,7 @@ export const contactSchema = z
       .email("Format email tidak valid"),
     jenis: z.string().trim().min(1, "Belum diisi"),
     customJenis: z.string().trim().max(80, "Maksimal 80 karakter").optional(),
-    pesan: z
-      .string()
-      .trim()
-      .min(1, "Belum diisi")
-      .min(10, "Pesan terlalu pendek"),
+    pesan: z.string().optional().default(""),
     _hp: z.string().max(0, "Spam detected").optional(),
   })
   .refine(
@@ -35,6 +31,6 @@ export type ContactFormData = {
   email: string;
   jenis: string;
   customJenis?: string;
-  pesan: string;
+  pesan?: string;
   _hp?: string;
 };
