@@ -278,6 +278,10 @@ export default function MarioConsoleSection() {
   const frameRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const grabHandleRef = useRef<HTMLDivElement>(null);
+  const scoreHudRef = useRef<HTMLDivElement>(null);
+  const digit1Ref = useRef<HTMLDivElement>(null);
+  const digit2Ref = useRef<HTMLDivElement>(null);
+  const plus1Ref = useRef<HTMLDivElement>(null);
 
   const [layoutState, setLayoutState] = useState<{ k: number; wn: number }>({
     k: 2,
@@ -501,11 +505,11 @@ export default function MarioConsoleSection() {
     let stepOffCount = 0;
     let landSquashCount = 0;
 
-    // SCORE HUD (Section 5.4 line 236)
+    // SCORE HUD (Section 5.4 pixel digit sprites)
     let coinScore = 0;
-    let hudPopTimer = 0;
-    let hudFlashYellowTimer = 0;
-    let hudRedFlashTimer = 0;
+    let hudYellowTimer = 0;
+    let hudBounceTimer = 0;
+    let hudRedTimer = 0;
     let hudShakeTimer = 0;
     let hudPlus1Timer = 0;
 
@@ -916,11 +920,11 @@ export default function MarioConsoleSection() {
       coinTimer = 0;
       collectCount += 1;
 
-      // SCORE HUD: +1 per rainbow coin (cap 99), pop 1.25 for 120ms, flash yellow
+      // SCORE HUD: +1 per rainbow coin (cap 99), bounce 4px for 150ms, yellow sheet for 150ms, +1 for 600ms
       coinScore = Math.min(99, coinScore + 1);
-      hudPopTimer = 0.12;
-      hudFlashYellowTimer = 0.12;
-      hudPlus1Timer = 0.65;
+      hudYellowTimer = 0.15;
+      hudBounceTimer = 0.15;
+      hudPlus1Timer = 0.60;
       setAnnouncedScore(coinScore);
       frameEl.dataset.coinScore = String(coinScore);
 
@@ -1488,9 +1492,9 @@ export default function MarioConsoleSection() {
             routePhase = "STEP1_LEFT_IDLE";
             phaseTimer = 0;
 
-            // SCORE HUD: resets to 00 ONLY at respawn, flashes red, shakes +-2px for 250ms, then blinks in sync
+            // SCORE HUD: resets to 00 ONLY at respawn, red sheet for 250ms, shakes +-2px for 250ms, then blinks in sync
             coinScore = 0;
-            hudRedFlashTimer = 0.25;
+            hudRedTimer = 0.25;
             hudShakeTimer = 0.25;
             setAnnouncedScore(0);
             frameEl.dataset.coinScore = "0";
@@ -1598,9 +1602,9 @@ export default function MarioConsoleSection() {
           walkAnimTime = 0;
           facing = 1;
 
-          // SCORE HUD: resets to 00 on return after being spat out, flashes red, shakes +-2px for 250ms, then blinks in sync
+          // SCORE HUD: resets to 00 on return after being spat out, red sheet for 250ms, shakes +-2px for 250ms, then blinks in sync
           coinScore = 0;
-          hudRedFlashTimer = 0.25;
+          hudRedTimer = 0.25;
           hudShakeTimer = 0.25;
           setAnnouncedScore(0);
           frameEl.dataset.coinScore = "0";
@@ -2334,9 +2338,9 @@ export default function MarioConsoleSection() {
       }
 
       // Decrement SCORE HUD timers
-      if (hudPopTimer > 0) hudPopTimer = Math.max(0, hudPopTimer - dt);
-      if (hudFlashYellowTimer > 0) hudFlashYellowTimer = Math.max(0, hudFlashYellowTimer - dt);
-      if (hudRedFlashTimer > 0) hudRedFlashTimer = Math.max(0, hudRedFlashTimer - dt);
+      if (hudYellowTimer > 0) hudYellowTimer = Math.max(0, hudYellowTimer - dt);
+      if (hudBounceTimer > 0) hudBounceTimer = Math.max(0, hudBounceTimer - dt);
+      if (hudRedTimer > 0) hudRedTimer = Math.max(0, hudRedTimer - dt);
       if (hudShakeTimer > 0) hudShakeTimer = Math.max(0, hudShakeTimer - dt);
       if (hudPlus1Timer > 0) hudPlus1Timer = Math.max(0, hudPlus1Timer - dt);
 
@@ -2862,85 +2866,92 @@ export default function MarioConsoleSection() {
         }
       }
 
-      // 15. SCORE HUD (Section 5.4 line 236: top-left corner, 14px from left and top edges)
-      // ONLY the number, nothing else: NO coin icon, NO "x", NO label, NO box.
-      // A two-digit counter (00 to 99) in Press Start 2P, BIG: 28px at K=2 (20px at K=1),
-      // white with a hard 3px outline (#2B1B0E in eight directions, no blur).
-      const hudMarginDev = Math.round(14 * (S / scaleK));
-      let textX = hudMarginDev;
-      let textY = hudMarginDev;
+      // 15. SCORE HUD (Pixel Digit Sprites: Section 5.4)
+      const scoreHudEl = scoreHudRef.current;
+      const d1El = digit1Ref.current;
+      const d2El = digit2Ref.current;
+      const p1El = plus1Ref.current;
 
-      if (hudShakeTimer > 0) {
-        textX += Math.round((Math.random() - 0.5) * 4 * (S / scaleK));
-        textY += Math.round((Math.random() - 0.5) * 4 * (S / scaleK));
+      if (scoreHudEl && d1El && d2El && p1El) {
+        const isDesk = typeof window !== "undefined" ? window.innerWidth >= 1024 : false;
+        const scale = isDesk ? 3 : 2;
+        const digitW = 12 * scale; // 36px desktop, 24px phone
+        const digitH = 16 * scale; // 48px desktop, 32px phone
+        const digitAdv = 11 * scale; // 33px desktop, 22px phone
+        const sheetW = 132 * scale; // 396px desktop, 264px phone
+        const sheetH = 16 * scale; // 48px desktop, 32px phone
+
+        let sheetUrl = "/environment/score-digits-white.png";
+        if (hudRedTimer > 0) {
+          sheetUrl = "/environment/score-digits-red.png";
+        } else if (hudYellowTimer > 0) {
+          sheetUrl = "/environment/score-digits-yellow.png";
+        }
+
+        // Bounce up 4 CSS px and back (translateY only, no scaling) on +1
+        let bounceY = 0;
+        if (hudBounceTimer > 0) {
+          const bp = 1 - (hudBounceTimer / 0.15);
+          bounceY = -Math.round(4 * Math.sin(bp * Math.PI));
+        }
+
+        // Shake +-2px on reset
+        let shakeX = 0;
+        let shakeY = 0;
+        if (hudShakeTimer > 0) {
+          shakeX = Math.round((Math.random() - 0.5) * 4);
+          shakeY = Math.round((Math.random() - 0.5) * 4);
+        }
+
+        // Blink in sync with hero 1-second respawn blink (10 Hz rhythm and phase)
+        let hudAlpha = 1.0;
+        if (rainbowState === "BLINK") {
+          const blinkOn = Math.floor(rainbowTimer * 20) % 2 === 0;
+          hudAlpha = blinkOn ? 0.25 : 1.0;
+        }
+
+        scoreHudEl.style.transform = `translate(${shakeX}px, ${bounceY + shakeY}px)`;
+        scoreHudEl.style.opacity = String(hudAlpha);
+
+        const tens = Math.floor(coinScore / 10) % 10;
+        const ones = coinScore % 10;
+
+        d1El.style.width = `${digitW}px`;
+        d1El.style.height = `${digitH}px`;
+        d1El.style.backgroundImage = `url(${sheetUrl})`;
+        d1El.style.backgroundSize = `${sheetW}px ${sheetH}px`;
+        d1El.style.backgroundPosition = `-${tens * digitW}px 0px`;
+        d1El.style.backgroundRepeat = "no-repeat";
+        d1El.style.left = "0px";
+
+        d2El.style.width = `${digitW}px`;
+        d2El.style.height = `${digitH}px`;
+        d2El.style.backgroundImage = `url(${sheetUrl})`;
+        d2El.style.backgroundSize = `${sheetW}px ${sheetH}px`;
+        d2El.style.backgroundPosition = `-${ones * digitW}px 0px`;
+        d2El.style.backgroundRepeat = "no-repeat";
+        d2El.style.left = `${digitAdv}px`;
+
+        if (hudPlus1Timer > 0) {
+          const p = 1 - (hudPlus1Timer / 0.60);
+          const riseY = -Math.round(p * 12);
+          const fade = Math.max(0, 1 - p);
+          const plus1Left = digitAdv + digitW + (isDesk ? 6 : 4);
+          const plus1Top = isDesk ? Math.round((digitH - 32) / 2) : 0;
+          p1El.style.display = "block";
+          p1El.style.width = "46px";
+          p1El.style.height = "32px";
+          p1El.style.backgroundImage = "url(/environment/score-plus1.png)";
+          p1El.style.backgroundSize = "46px 32px";
+          p1El.style.backgroundRepeat = "no-repeat";
+          p1El.style.left = `${plus1Left}px`;
+          p1El.style.top = `${plus1Top}px`;
+          p1El.style.transform = `translateY(${riseY}px)`;
+          p1El.style.opacity = String(fade);
+        } else {
+          p1El.style.display = "none";
+        }
       }
-
-      ctx.save();
-      // Blinks together with the hero's 1-second respawn blink (same 10 Hz rhythm and phase)
-      if (rainbowState === "BLINK") {
-        const blinkOn = Math.floor(rainbowTimer * 20) % 2 === 0;
-        ctx.globalAlpha = blinkOn ? 0.25 : 1.0;
-      }
-
-      const fontSizeDev = (scaleK === 2 ? 28 : 20) * (S / scaleK);
-      ctx.font = `${fontSizeDev}px var(--font-press-start-2p), monospace`;
-      ctx.textBaseline = "top";
-      ctx.textAlign = "left";
-
-      const scoreStr = String(coinScore).padStart(2, "0");
-
-      ctx.save();
-      if (hudPopTimer > 0) {
-        const textMetrics = ctx.measureText(scoreStr);
-        const cx = textX + textMetrics.width / 2;
-        const cy = textY + fontSizeDev / 2;
-        ctx.translate(cx, cy);
-        ctx.scale(1.25, 1.25);
-        ctx.translate(-cx, -cy);
-      }
-
-      // Hard 3px outline (#2B1B0E in eight directions, no blur, no background box)
-      const outlineDev = Math.max(3, Math.round(3 * (S / scaleK)));
-      ctx.fillStyle = "#2B1B0E";
-      ctx.fillText(scoreStr, textX - outlineDev, textY);
-      ctx.fillText(scoreStr, textX + outlineDev, textY);
-      ctx.fillText(scoreStr, textX, textY - outlineDev);
-      ctx.fillText(scoreStr, textX, textY + outlineDev);
-      ctx.fillText(scoreStr, textX - outlineDev, textY - outlineDev);
-      ctx.fillText(scoreStr, textX + outlineDev, textY - outlineDev);
-      ctx.fillText(scoreStr, textX - outlineDev, textY + outlineDev);
-      ctx.fillText(scoreStr, textX + outlineDev, textY + outlineDev);
-
-      // Text color: red flash on respawn reset, yellow flash on +1, white normal
-      if (hudRedFlashTimer > 0) {
-        ctx.fillStyle = "#E52521";
-      } else if (hudFlashYellowTimer > 0) {
-        ctx.fillStyle = "#FFD700";
-      } else {
-        ctx.fillStyle = "#FFFFFF";
-      }
-      ctx.fillText(scoreStr, textX, textY);
-      ctx.restore();
-
-      // Rising text-plus1.png beside the score number on +1
-      if (hudPlus1Timer > 0 && images.plus1?.complete && images.plus1.naturalWidth > 0) {
-        const p = 1 - (hudPlus1Timer / 0.65);
-        ctx.save();
-        ctx.globalAlpha = Math.max(0, 1 - p);
-        const numW = ctx.measureText(scoreStr).width;
-        const plus1X = textX + numW + Math.round(8 * (S / scaleK));
-        const plus1Y = textY + Math.round(4 * (S / scaleK)) - Math.round(p * 14 * (S / scaleK));
-        ctx.drawImage(
-          images.plus1,
-          plus1X,
-          plus1Y,
-          19 * S,
-          13 * S
-        );
-        ctx.restore();
-      }
-
-      ctx.restore();
 
       // 16. White Flash Overlay
       let currentFlash = flashAlpha;
@@ -3438,6 +3449,52 @@ export default function MarioConsoleSection() {
                   touchAction: "auto",
                 }}
               />
+
+              {/* SCORE HUD: Pixel Digit Sprites (Section 5.4) */}
+              <div
+                ref={scoreHudRef}
+                aria-hidden="true"
+                className="absolute top-[10px] left-[10px] z-20 pointer-events-none select-none"
+                style={{
+                  imageRendering: "pixelated",
+                }}
+              >
+                <div
+                  ref={digit1Ref}
+                  className="absolute top-0 left-0"
+                  style={{
+                    imageRendering: "pixelated",
+                    width: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? 36 : 24,
+                    height: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? 48 : 32,
+                    backgroundImage: "url(/environment/score-digits-white.png)",
+                    backgroundSize: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? "396px 48px" : "264px 32px",
+                    backgroundPosition: "0px 0px",
+                    backgroundRepeat: "no-repeat",
+                  }}
+                />
+                <div
+                  ref={digit2Ref}
+                  className="absolute top-0"
+                  style={{
+                    imageRendering: "pixelated",
+                    width: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? 36 : 24,
+                    height: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? 48 : 32,
+                    backgroundImage: "url(/environment/score-digits-white.png)",
+                    backgroundSize: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? "396px 48px" : "264px 32px",
+                    backgroundPosition: "0px 0px",
+                    backgroundRepeat: "no-repeat",
+                    left: layoutState.k === 2 && (typeof window !== "undefined" && window.innerWidth >= 1024) ? 33 : 22,
+                  }}
+                />
+                <div
+                  ref={plus1Ref}
+                  className="absolute pointer-events-none"
+                  style={{
+                    imageRendering: "pixelated",
+                    display: "none",
+                  }}
+                />
+              </div>
 
               {/* Tiny 24px Speaker Mute Button at top-right corner */}
               <button
