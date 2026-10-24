@@ -23,14 +23,14 @@ export default function Home() {
 
   return (
     <>
+      {/* Navbar as direct child of body */}
+      <Navbar />
+
       {/* 0. Intro Cutscene Loading Screen (first visit per session, Mario Zone #1) */}
       <LoadingScreen />
 
       {/* Main Page Content */}
       <div className="min-h-screen bg-white text-obsidian flex flex-col">
-        {/* Navbar */}
-        <Navbar />
-
         {/* 1. Hero Section (#home) */}
         <HeroSection onOpenCv={() => setIsCvOpen(true)} />
 

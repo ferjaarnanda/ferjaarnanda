@@ -24,7 +24,7 @@
   top: 0;
   left: 0;
   right: 0;
-  z-index: 50;
+  z-index: 60;
   height: 88px;
   pointer-events: none;
   contain: layout paint;
@@ -103,6 +103,169 @@
 
 .nav-link-row.is-scrolled {
   transform: translateX(-50%) translateY(12px);
+}
+
+/* ==========================================================================
+   MOBILE / TOUCH / IN-APP BROWSER NAVBAR
+   Plain paint properties only:
+   - no clip-path, no backdrop-filter, no will-change, no contain, no CSS filter
+   - STATE A (scrollY <= 40): top 0, left 0, right 0, height 56px, border-radius 0, background #E52521
+   - STATE B (scrollY > 40): top 10px, left 12px, right 12px, height 48px, border-radius 999px,
+     background rgba(229,37,33,0.94), 1px border rgba(255,255,255,0.35), shadow 0 3px 0 rgba(0,0,0,0.18)
+   - Transition 320ms cubic-bezier(.22,1,.36,1) on top, left, right, height, border-radius, background-color, border-color, box-shadow
+   ========================================================================== */
+
+@media (max-width: 767px), (pointer: coarse) {
+  .nav-header {
+    position: fixed !important;
+    z-index: 60 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    pointer-events: auto !important;
+    clip-path: none !important;
+    -webkit-clip-path: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    will-change: auto !important;
+    contain: none !important;
+    filter: none !important;
+    -webkit-filter: none !important;
+    overflow: visible !important;
+    transition: top 320ms cubic-bezier(.22, 1, .36, 1),
+                left 320ms cubic-bezier(.22, 1, .36, 1),
+                right 320ms cubic-bezier(.22, 1, .36, 1),
+                height 320ms cubic-bezier(.22, 1, .36, 1),
+                border-radius 320ms cubic-bezier(.22, 1, .36, 1),
+                background-color 320ms cubic-bezier(.22, 1, .36, 1),
+                border-color 320ms cubic-bezier(.22, 1, .36, 1),
+                box-shadow 320ms cubic-bezier(.22, 1, .36, 1) !important;
+  }
+
+  .nav-header:not(.is-scrolled),
+  .nav-header[data-nav="A"] {
+    top: 0px !important;
+    left: 0px !important;
+    right: 0px !important;
+    height: 56px !important;
+    border-radius: 0px !important;
+    background-color: #E52521 !important;
+    background: #E52521 !important;
+    border: 1px solid transparent !important;
+    box-shadow: none !important;
+  }
+
+  .nav-header.is-scrolled,
+  .nav-header[data-nav="B"] {
+    top: 10px !important;
+    left: 12px !important;
+    right: 12px !important;
+    height: 48px !important;
+    border-radius: 999px !important;
+    background-color: rgba(229, 37, 33, 0.94) !important;
+    background: rgba(229, 37, 33, 0.94) !important;
+    border: 1px solid rgba(255, 255, 255, 0.35) !important;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18) !important;
+  }
+
+  .nav-header .nav-bg,
+  .nav-header .nav-ring {
+    display: none !important;
+  }
+
+  .nav-header .nav-link-row {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    pointer-events: auto !important;
+    transition: none !important;
+  }
+}
+
+/* In-App Browsers / user agent matches */
+[data-mobile-nav="true"].nav-header,
+html[data-mobile-device="true"] .nav-header {
+  position: fixed !important;
+  z-index: 60 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: auto !important;
+  clip-path: none !important;
+  -webkit-clip-path: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  will-change: auto !important;
+  contain: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  overflow: visible !important;
+  transition: top 320ms cubic-bezier(.22, 1, .36, 1),
+              left 320ms cubic-bezier(.22, 1, .36, 1),
+              right 320ms cubic-bezier(.22, 1, .36, 1),
+              height 320ms cubic-bezier(.22, 1, .36, 1),
+              border-radius 320ms cubic-bezier(.22, 1, .36, 1),
+              background-color 320ms cubic-bezier(.22, 1, .36, 1),
+              border-color 320ms cubic-bezier(.22, 1, .36, 1),
+              box-shadow 320ms cubic-bezier(.22, 1, .36, 1) !important;
+}
+
+[data-mobile-nav="true"].nav-header:not(.is-scrolled),
+[data-mobile-nav="true"].nav-header[data-nav="A"],
+html[data-mobile-device="true"] .nav-header:not(.is-scrolled),
+html[data-mobile-device="true"] .nav-header[data-nav="A"] {
+  top: 0px !important;
+  left: 0px !important;
+  right: 0px !important;
+  height: 56px !important;
+  border-radius: 0px !important;
+  background-color: #E52521 !important;
+  background: #E52521 !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+}
+
+[data-mobile-nav="true"].nav-header.is-scrolled,
+[data-mobile-nav="true"].nav-header[data-nav="B"],
+html[data-mobile-device="true"] .nav-header.is-scrolled,
+html[data-mobile-device="true"] .nav-header[data-nav="B"] {
+  top: 10px !important;
+  left: 12px !important;
+  right: 12px !important;
+  height: 48px !important;
+  border-radius: 999px !important;
+  background-color: rgba(229, 37, 33, 0.94) !important;
+  background: rgba(229, 37, 33, 0.94) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18) !important;
+}
+
+[data-mobile-nav="true"].nav-header .nav-bg,
+[data-mobile-nav="true"].nav-header .nav-ring,
+html[data-mobile-device="true"] .nav-header .nav-bg,
+html[data-mobile-device="true"] .nav-header .nav-ring {
+  display: none !important;
+}
+
+[data-mobile-nav="true"].nav-header .nav-link-row,
+html[data-mobile-device="true"] .nav-header .nav-link-row {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  pointer-events: auto !important;
+  transition: none !important;
 }
 
 @supports not (backdrop-filter: blur(16px)) {

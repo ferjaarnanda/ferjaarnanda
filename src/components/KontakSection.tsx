@@ -118,8 +118,9 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [serverWaUrl, setServerWaUrl] = useState<string | null>(null);
   const [serverMailtoUrl, setServerMailtoUrl] = useState<string | null>(null);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [successNotice, setSuccessNotice] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const successTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Focus refs for the first invalid field
   const namaRef = useRef<HTMLInputElement>(null);
@@ -127,6 +128,12 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
   const jenisRef = useRef<HTMLSelectElement>(null);
   const customJenisRef = useRef<HTMLInputElement>(null);
   const pesanRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (initialService) {
@@ -194,6 +201,7 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setServerError(null);
+    setSuccessNotice(false);
 
     // Client-side Zod validation
     const parsed = contactSchema.safeParse(formData);
@@ -226,8 +234,13 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
     try {
       const res = await sendContactMessage(formData);
       if (res.success) {
-        setIsSuccess(true);
-        // Clear form only on success
+        setSuccessNotice(true);
+        if (successTimerRef.current) clearTimeout(successTimerRef.current);
+        successTimerRef.current = setTimeout(() => {
+          setSuccessNotice(false);
+        }, 5000);
+
+        // Clear form only on success so it is ready for another message
         setFormData({
           nama: "",
           email: "",
@@ -265,12 +278,12 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
     <section
       id="kontak"
       aria-labelledby="kontak-heading"
-      className="w-full bg-white border-t border-rule py-16 md:py-24"
+      className="w-full bg-white border-t border-rule py-16 md:py-24 scroll-mt-[96px] md:scroll-mt-[112px]"
     >
       <div className="w-full max-w-[1200px] mx-auto px-5 lg:px-6">
         <h2
           id="kontak-heading"
-          className="text-2xl sm:text-3xl font-bold tracking-tight text-obsidian mb-10 md:mb-14"
+          className="text-2xl sm:text-3xl font-bold tracking-tight text-obsidian mb-10 md:mb-14 scroll-mt-[96px] md:scroll-mt-[112px]"
         >
           Hubungi Aku
         </h2>
@@ -329,36 +342,7 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
 
           {/* Right Column: Controlled Contact Form */}
           <div className="flex flex-col">
-            {isSuccess ? (
-              <div
-                role="status"
-                aria-live="polite"
-                className="p-6 bg-emerald-50 border border-emerald-200 rounded-[10px] text-emerald-900 flex flex-col gap-3"
-              >
-                <div className="font-semibold text-base">Pesan terkirim, terima kasih!</div>
-                <p className="text-sm leading-relaxed">
-                  Terima kasih sudah menghubungi. Aku akan meninjau kebutuhan websitemu dan segera membalas ke emailmu.
-                </p>
-                <div className="flex items-center gap-4 mt-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsSuccess(false)}
-                    className="text-xs font-semibold text-emerald-800 underline underline-offset-2 cursor-pointer"
-                  >
-                    Kirim pesan lain &rarr;
-                  </button>
-                  <a
-                    href={whatsappLink()}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs font-semibold text-emerald-800 underline underline-offset-2"
-                  >
-                    WhatsApp &rarr;
-                  </a>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
+            <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
                 {/* Hidden Honeypot for Spam Protection */}
                 <input
                   type="text"
@@ -548,6 +532,17 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
                   {isSubmitting ? "Mengirim..." : "Kirim"}
                 </button>
 
+                {/* Short green success notice directly under Kirim button */}
+                {successNotice && (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    className="text-sm font-medium text-emerald-600 py-1 transition-opacity duration-300"
+                  >
+                    Pesan berhasil dikirim
+                  </p>
+                )}
+
                 {/* Red Error Message UNDER button (no top banner) with WhatsApp and Email fallback buttons */}
                 {serverError && (
                   <div
@@ -580,7 +575,6 @@ export default function KontakSection({ initialService }: KontakSectionProps) {
                   </div>
                 )}
               </form>
-            )}
           </div>
         </div>
       </div>

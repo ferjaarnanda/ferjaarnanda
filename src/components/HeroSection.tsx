@@ -11,7 +11,7 @@ export default function HeroSection({ onOpenCv }: HeroSectionProps) {
   return (
     <section
       id="home"
-      className="w-full max-w-[1200px] mx-auto px-5 sm:px-6 pt-28 sm:pt-36 pb-20 sm:pb-28"
+      className="w-full max-w-[1200px] mx-auto px-5 sm:px-6 pt-28 sm:pt-36 pb-20 sm:pb-28 scroll-mt-[96px] md:scroll-mt-[112px]"
     >
       <div className="max-w-3xl">
         {/* Heading */}

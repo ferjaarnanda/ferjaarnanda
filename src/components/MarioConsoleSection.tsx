@@ -2873,25 +2873,28 @@ export default function MarioConsoleSection() {
       const p1El = plus1Ref.current;
 
       if (scoreHudEl && d1El && d2El && p1El) {
-        const scale = 2; // 2 CSS px per art pixel on desktop AND phones
-        const digitW = 12 * scale; // 24px
-        const digitH = 16 * scale; // 32px
-        const digitAdv = 11 * scale; // 22px (11 art pixels advance)
-        const sheetW = 132 * scale; // 264px
-        const sheetH = 16 * scale; // 32px
+        const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+        const S = Math.round(2 * dpr) / dpr;
+        const digitW = 7 * S; // ~14px
+        const digitH = 9 * S; // ~18px
+        const digitAdv = 6 * S; // ~12px (6 art pixels advance, outlines overlap by 1)
+        const sheetW = 77 * S; // ~154px (11 frames of 7 art pixels)
+        const sheetH = 9 * S; // ~18px
+        const plus1W = 13 * S; // ~26px (13 art pixels)
+        const plus1H = 9 * S; // ~18px
 
-        let sheetUrl = "/environment/score-digits-white.png";
+        let sheetUrl = "/environment/score-mini-white.png";
         if (hudRedTimer > 0) {
-          sheetUrl = "/environment/score-digits-red.png";
+          sheetUrl = "/environment/score-mini-red.png";
         } else if (hudYellowTimer > 0) {
-          sheetUrl = "/environment/score-digits-yellow.png";
+          sheetUrl = "/environment/score-mini-yellow.png";
         }
 
-        // Bounce up 4 CSS px and back (translateY only, no scaling) on +1
+        // Bounce up 3 CSS px and back (translateY only, no scaling) on +1
         let bounceY = 0;
         if (hudBounceTimer > 0) {
           const bp = 1 - (hudBounceTimer / 0.15);
-          bounceY = -Math.round(4 * Math.sin(bp * Math.PI));
+          bounceY = -Math.round(3 * Math.sin(bp * Math.PI));
         }
 
         // Shake +-2px on reset
@@ -2933,18 +2936,17 @@ export default function MarioConsoleSection() {
 
         if (hudPlus1Timer > 0) {
           const p = 1 - (hudPlus1Timer / 0.60);
-          const riseY = -Math.round(p * 12);
+          const riseY = -Math.round(p * 10);
           const fade = Math.max(0, 1 - p);
-          const plus1Left = digitAdv + digitW + 4; // 50px
-          const plus1Top = 0; // Same size and height as the score (scale 2)
+          const plus1Left = digitAdv + digitW + 4;
           p1El.style.display = "block";
-          p1El.style.width = "46px";
-          p1El.style.height = "32px";
-          p1El.style.backgroundImage = "url(/environment/score-plus1.png)";
-          p1El.style.backgroundSize = "46px 32px";
+          p1El.style.width = `${plus1W}px`;
+          p1El.style.height = `${plus1H}px`;
+          p1El.style.backgroundImage = "url(/environment/score-mini-plus1.png)";
+          p1El.style.backgroundSize = `${plus1W}px ${plus1H}px`;
           p1El.style.backgroundRepeat = "no-repeat";
           p1El.style.left = `${plus1Left}px`;
-          p1El.style.top = `${plus1Top}px`;
+          p1El.style.top = "0px";
           p1El.style.transform = `translateY(${riseY}px)`;
           p1El.style.opacity = String(fade);
         } else {
@@ -3403,7 +3405,7 @@ export default function MarioConsoleSection() {
     <section
       id="jenis"
       aria-labelledby="jenis-heading"
-      className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 py-8 lg:py-10 border-t border-rule scroll-mt-24"
+      className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 py-8 lg:py-10 border-t border-rule scroll-mt-[96px] md:scroll-mt-[112px]"
     >
       <motion.h2
         id="jenis-heading"
@@ -3411,7 +3413,7 @@ export default function MarioConsoleSection() {
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true, amount: 0.3 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
-        className="text-2xl sm:text-3xl lg:text-[32px] font-bold tracking-tight text-obsidian mb-5 lg:mb-6 leading-tight"
+        className="text-2xl sm:text-3xl lg:text-[32px] font-bold tracking-tight text-obsidian mb-5 lg:mb-6 leading-tight scroll-mt-[96px] md:scroll-mt-[112px]"
       >
         Beberapa contoh website yang bisa kubuat
       </motion.h2>
@@ -3463,10 +3465,10 @@ export default function MarioConsoleSection() {
                   className="absolute top-0 left-0"
                   style={{
                     imageRendering: "pixelated",
-                    width: 24,
-                    height: 32,
-                    backgroundImage: "url(/environment/score-digits-white.png)",
-                    backgroundSize: "264px 32px",
+                    width: 14,
+                    height: 18,
+                    backgroundImage: "url(/environment/score-mini-white.png)",
+                    backgroundSize: "154px 18px",
                     backgroundPosition: "0px 0px",
                     backgroundRepeat: "no-repeat",
                   }}
@@ -3476,13 +3478,13 @@ export default function MarioConsoleSection() {
                   className="absolute top-0"
                   style={{
                     imageRendering: "pixelated",
-                    width: 24,
-                    height: 32,
-                    backgroundImage: "url(/environment/score-digits-white.png)",
-                    backgroundSize: "264px 32px",
+                    width: 14,
+                    height: 18,
+                    backgroundImage: "url(/environment/score-mini-white.png)",
+                    backgroundSize: "154px 18px",
                     backgroundPosition: "0px 0px",
                     backgroundRepeat: "no-repeat",
-                    left: 22,
+                    left: 12,
                   }}
                 />
                 <div

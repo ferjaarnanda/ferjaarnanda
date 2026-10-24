@@ -130,7 +130,7 @@ export default function PaketSection({ onSelectPackage }: PaketSectionProps) {
       id="paket"
       data-paused={isPaused ? "true" : "false"}
       aria-labelledby="paket-heading"
-      className="mario-zone w-full relative bg-[#5C94FC] select-none"
+      className="mario-zone w-full relative bg-[#5C94FC] select-none scroll-mt-[96px] md:scroll-mt-[112px]"
     >
       {/* Top Divider Row of tile-brick.png (integer scale 4 = 64px) */}
       <div
@@ -157,7 +157,7 @@ export default function PaketSection({ onSelectPackage }: PaketSectionProps) {
         >
           <h2
             id="paket-heading"
-            className="text-lg sm:text-2xl md:text-3xl font-bold text-obsidian tracking-tight bg-white px-7 sm:px-10 py-3 sm:py-4 inline-block rounded-none border-4 border-[#2B1B0E] [box-shadow:6px_6px_0px_#2B1B0E]"
+            className="text-lg sm:text-2xl md:text-3xl font-bold text-obsidian tracking-tight bg-white px-7 sm:px-10 py-3 sm:py-4 inline-block rounded-none border-4 border-[#2B1B0E] [box-shadow:6px_6px_0px_#2B1B0E] scroll-mt-[96px] md:scroll-mt-[112px]"
             style={{ fontFamily: "var(--font-press-start-2p)" }}
           >
             Kategori Jasa
